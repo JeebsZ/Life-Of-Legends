@@ -36,11 +36,20 @@ exclude = ['assets\customsfx', 'assets\sfx', 'assets\voice']
 # not in [project].dependencies; `dev_packages` tells `flet build` to pip-install
 # it from the local folder (path is relative to this file's directory).
 [tool.flet.android]
-dependencies = ["flet-lumen-notify", "flet-lumen-vision"]
+dependencies = ["flet-lumen-notify", "flet-lumen-vision", "flet-lumen-ocr"]
 # Android 8.0+. flutter_local_notifications relies on java.time, which is built in
 # from API 26; this lets the extension skip core library desugaring, which
 # `flet build` has no switch for (see extensions/flet_lumen_notify/README.md).
 min_sdk_version = 26
+# The ML Kit text plugin (flet-lumen-ocr) mentions its Chinese/Devanagari/Japanese/Korean
+# recognizers, which we leave out on purpose (Latin only, ~16 MB smaller). R8 would stop the
+# build on those missing classes, so tell it they're expected to be absent.
+proguard_rules = [
+    "-dontwarn com.google.mlkit.vision.text.chinese.**",
+    "-dontwarn com.google.mlkit.vision.text.devanagari.**",
+    "-dontwarn com.google.mlkit.vision.text.japanese.**",
+    "-dontwarn com.google.mlkit.vision.text.korean.**",
+]
 
 # tflite_flutter 0.12.1 (food scan) compiles Java at 11 but Kotlin at 17; Gradle rejects the
 # mismatch by default. Both run fine on Android, so downgrade the check to a warning.
@@ -50,6 +59,7 @@ min_sdk_version = 26
 [tool.flet.dev_packages]
 flet-lumen-notify = "extensions/flet_lumen_notify"
 flet-lumen-vision = "extensions/flet_lumen_vision"
+flet-lumen-ocr = "extensions/flet_lumen_ocr"
 
 # POST_NOTIFICATIONS: Android 13+ runtime permission. RECEIVE_BOOT_COMPLETED: re-arm
 # scheduled reminders after a reboot. VIBRATE: notification vibration. (The
