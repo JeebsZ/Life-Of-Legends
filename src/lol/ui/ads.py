@@ -205,7 +205,7 @@ async def limit_gate(app: App, feature: str, *, manual: Callable[[], Any] | None
         result = await show_rewarded(app, "bonus_scan")
         if result == "watched" and g.grant_bonus(feature, 1, app.today()):
             app.save()
-            app.toast(f"+1 {lim.label.lower()} for today", ft.Icons.CELEBRATION)
+            app.toast("+1 use added for today", ft.Icons.CELEBRATION)
             return True
         if result == "skipped":
             app.toast("No problem. Manual entry still works.", ft.Icons.INFO_OUTLINE)

@@ -684,6 +684,7 @@ class MealScreen:
             if not await ads.limit_gate(app, "meal_scan", manual=self._add_quick,
                                         manual_label="Add food by hand"):
                 return
+            self._refresh()  # the +1 from an ad shows in the counter
             data = await capture(app)
             if not data:
                 return

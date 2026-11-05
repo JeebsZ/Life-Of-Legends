@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import math
 import time
 from datetime import date, datetime
@@ -24,17 +25,21 @@ import flet.canvas as cv
 
 from lol.core import premium
 from lol.core import run as rcore
+from lol.core.adventure import AdventureEngine
 from lol.core.models import RunEntry
 from lol.core.run_cues import CUE_EVERY, CueCoach
 from lol.core.runlog import CHALLENGE_COINS, CHALLENGE_XP, MIN_LOG_M, PACE_BADGES, TIER_BY_ID
 from lol.ui import ads, audio, gps, sfx
 from lol.ui import components as ui
 from lol.ui import theme as th
+from lol.ui.adventure_layer import AdventureRunCard
 from lol.ui.screens import common
 from lol.ui.theme import C, Radius, Size, Space, Type
 
 if TYPE_CHECKING:
     from lol.ui.app import App
+
+log = logging.getLogger(__name__)
 
 OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 OSM_ATTRIBUTION = "OpenStreetMap contributors"  # the attribution layer adds the ©
@@ -131,7 +136,22 @@ class RunScreen:
         self.live_map: Any = None
         self.live_poly: Any = None
         self.live_marks: Any = None
+        self.adventure_engine = AdventureEngine()
+        self.adventure_card: AdventureRunCard | None = None
+        self._last_adv_dist = 0.0
+        self._last_adv_time = 0.0
         self._build_live()
+
+    def _play_adventure_sound(self, sound_name: str) -> None:
+        sound_map = {
+            "slime_defeat.ogg": "quest_clear",
+            "milestone_surge.ogg": "milestone",
+            "cluster_spawn.ogg": "objective_new",
+            "crit_hit.ogg": "power_up",
+        }
+        stem = sound_map.get(sound_name, sound_name.removesuffix(".ogg").removesuffix(".wav"))
+        if stem in sfx.NAMES:
+            sfx.play(stem)
 
     # ------------------------------------------------------------------ lifecycle
     def restyle(self) -> None:
@@ -606,8 +626,17 @@ class RunScreen:
                         size=Type.CAPTION, color=C.TEXT_DIM, expand=True)],
                 spacing=Space.SM), padding=Space.SM),
         ], spacing=Space.SM, tight=True, visible=False)
+        self.adventure_card = AdventureRunCard(
+            self.adventure_engine,
+            on_play_sound=self._play_adventure_sound,
+        )
+        self.adventure_wrap = ft.Container(
+            self.adventure_card,
+            padding=ft.Padding.symmetric(horizontal=Space.GUTTER),
+        )
         self.live_view = ft.Column([
             self.map_wrap,
+            self.adventure_wrap,
             ft.Container(ft.Column([
                 ft.Row([self.l_dot, self.l_status, ft.Container(expand=True), self.l_banner],
                        spacing=Space.SM),
@@ -663,6 +692,8 @@ class RunScreen:
         now = self.gps.now()
         basic = self.tracking == "basic"
         self.map_wrap.visible = self.full_stats.visible = not basic
+        if hasattr(self, "adventure_wrap"):
+            self.adventure_wrap.visible = not basic
         self.basic_stats.visible = basic
         if basic:
             self.l_steps.value = f"{self._steps_now():,}"
@@ -779,6 +810,9 @@ class RunScreen:
                      if st.state != "cleared"]
         goal_m = TIER_BY_ID[self.goal].meters if self.goal else None
         self.coach = CueCoach(s.mode, s.cue_every, goal_m, uncleared)
+        self.adventure_engine = AdventureEngine()
+        self._last_adv_dist = 0.0
+        self._last_adv_time = now
         self.started = datetime.now().strftime("%H:%M")
         self.phase = "live"
         self.gen += 1
@@ -799,6 +833,8 @@ class RunScreen:
         await ui.buzz("medium")
 
     async def _tick(self, gen: int) -> None:
+        last_adv_dist = 0.0
+        last_adv_time = self.gps.now()
         while self.gen == gen and self.phase == "live":
             await asyncio.sleep(TICK_S)
             if self.gen != gen or self.phase != "live" or self.tracker is None:
@@ -810,6 +846,42 @@ class RunScreen:
             if wall - self._last_map >= MAP_EVERY_S and n != self._map_points:
                 self._last_map, self._map_points = wall, n
                 self._update_map(now)  # the polyline is the heavy part: every 2 s at most
+
+            # --- Adventure tick hook with emulator & stationary safety ---
+            with contextlib.suppress(Exception):
+                delta_s = max(0.0, now - last_adv_time)
+                last_adv_time = now
+
+                dist_inc = max(0.0, self.tracker.distance_m - last_adv_dist)
+                last_adv_dist = self.tracker.distance_m
+
+                is_still = (
+                    self.tracker.paused
+                    or self.tracker.auto_paused(now)
+                    or self.perm != gps.GRANTED
+                    or not self.tracker.points
+                )
+                if is_still:
+                    speed_kmh = 0.0
+                else:
+                    pace = self.tracker.current_pace(now)
+                    if pace and pace > 0:
+                        speed_kmh = 3600.0 / pace
+                    elif delta_s > 0 and dist_inc > 0:
+                        speed_kmh = (dist_inc / delta_s) * 3.6
+                    else:
+                        speed_kmh = 0.0
+
+                if hasattr(self, "adventure_engine") and self.adventure_engine is not None:
+                    adv_events = self.adventure_engine.update_tick(
+                        delta_seconds=delta_s,
+                        speed_kmh=speed_kmh,
+                        distance_increment_m=dist_inc,
+                    )
+                    if hasattr(self, "adventure_card") and self.adventure_card is not None:
+                        self.adventure_card.process_tick_events(adv_events)
+                        self.adventure_card.refresh_display(current_speed_kmh=speed_kmh)
+
             ui.refresh(self.live_view)
             self._cues(now)
 
@@ -851,7 +923,9 @@ class RunScreen:
         self._finish_open = True
         await ui.pop(self.b_finish)
         short = tr.distance_m < MIN_LOG_M
-        body = [common.hint(f"{km(tr.distance_m)} km · {rcore.fmt_duration(tr.moving_s)} "
+        shown = (f"{self._steps_now():,} steps (est.)" if self.tracking == "basic"
+                 else f"{km(tr.distance_m)} km")
+        body = [common.hint(f"{shown} · {rcore.fmt_duration(tr.moving_s)} "
                             "moving" + (" - too short to save." if short else "."))]
         if not short:
             body.append(ft.Row([common.primary_button(
