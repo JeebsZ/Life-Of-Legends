@@ -15,6 +15,7 @@ from lol.core.models import NOTIFY_SOUNDS
 from lol.ui import components as ui
 from lol.ui import notify, sfx
 from lol.ui.screens import common
+from lol.ui.screens.premium import settings_blocks as premium_settings
 from lol.ui.screens.profile import theme_picker, voice_controls
 from lol.ui.theme import C, Motion, Space, Type
 
@@ -57,6 +58,7 @@ class SettingsScreen:
                 common.secondary_button("Redo personalize", self._redo,
                                         icon=ft.Icons.AUTO_AWESOME),
             ], spacing=Space.SM, tight=True), padding=Space.MD),
+            *premium_settings(self.app, self.restyle),  # usage left, version, Developer
         ]
 
     async def _redo(self, _: Any = None) -> None:

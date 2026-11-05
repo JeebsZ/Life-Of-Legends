@@ -45,13 +45,14 @@ TILES: dict[str, tuple[str, ft.IconData, str]] = {
     "meals": ("Meals", ft.Icons.RESTAURANT, "#FFB86B"),
     "run": ("Run", ft.Icons.DIRECTIONS_RUN, "#FF8A5B"),
     "study": ("Study", ft.Icons.STYLE, "#8EA2FF"),
+    "premium": ("Premium", ft.Icons.WORKSPACE_PREMIUM, "#F5C66B"),
 }
 MODULE_TILES = {"workout", "sleep", "water", "energy", "insights", "body", "meals", "run"}  # hidden when switched off
 SECTIONS = (
     ("You", ("profile", "skills", "achievements", "report")),
     ("Track", ("workout", "run", "sleep", "water", "energy", "body", "meals", "insights")),
     ("Plan & focus", ("bills", "calendar", "focus", "study", "templates", "logbook")),
-    ("Data & app", ("backup", "settings")),
+    ("Data & app", ("backup", "settings", "premium")),
 )
 COMING_SOON = {"achievements"}
 SLIDE = 0.18  # slide distance (fraction of the width)
@@ -116,6 +117,9 @@ def _make(app: App, key: str) -> Any:
     if key.startswith("study"):  # study, study_deck, study_drafts, study_run
         from lol.ui.screens.study import make
         return make(app, key)
+    if key == "premium":
+        from lol.ui.screens.premium import PremiumScreen
+        return PremiumScreen(app)
     if key == "settings":
         from lol.ui.screens.settings import SettingsScreen
         return SettingsScreen(app)
@@ -296,7 +300,7 @@ def pinnable_keys(app: App) -> list[str]:
     a new tile is pinnable automatically; coming-soon tiles and modules switched off in
     Settings are left out."""
     keys = [k for _, ks in SECTIONS for k in ks]
-    return pins.pinnable(keys, module_on=app.game.module_on, exclude=COMING_SOON)
+    return pins.pinnable(keys, module_on=app.game.module_on, exclude=COMING_SOON | {"premium"})
 
 
 def pin_picker(app: App, on_pick: Callable[[str], Any], *,

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import re
 import string
 import time
@@ -19,7 +20,7 @@ from datetime import date, datetime
 
 import flet as ft
 
-from lol.core import pins, welcome
+from lol.core import pins, premium, welcome
 from lol.core.game import COINS_BY_DIFFICULTY, Game
 from lol.core.models import RANK_NAMES, Completion
 from lol.core.progression import bar_steps, xp_for_level
@@ -117,6 +118,10 @@ class App:
     def __init__(self, page: ft.Page) -> None:
         self.page = page
         self.game = Game.load(today=date.today())
+        # premium: dev switches count only with LOL_DEV=1 or the hidden Developer menu
+        self.game.dev_env = os.getenv("LOL_DEV", "").strip().lower() in ("1", "true", "yes")
+        premium.touch(self.game.data.premium, date.today())
+        self.game.sync_ad_flags()
         self.tab = TAB_TODAY
         self.prev_tab = TAB_TODAY  # where the center slot's back arrow returns to
         p = self.game.profile
@@ -245,6 +250,7 @@ class App:
         ui.voice(clip_for("level_up", sub))
         await self.fx_seal.show(f"LEVEL {lvl}", ui.split_lead(sub)[1].strip(),
                                 eyebrow="LEVEL UP")
+        self.offer_premium("level_up")
 
     # ------------------------------------------------------------------ effects
     async def think(self, seconds: float = 0.8, label: str = "Analysis…") -> None:
@@ -434,6 +440,21 @@ class App:
         self._welcome_variant = i
         self.notice.say(voice.LINES["hello_again"][i], WELCOME_ICONS.get(welcome.SLOTS[i]),
                         ("hello_again", i))
+        self.offer_premium("day3")
+
+    def offer_premium(self, reason: str) -> bool:
+        """One gentle Luma notice about premium (first limit / first level-up / day 3): once
+        per reason, at most every few days, never for premium users. 'limit' only records
+        the moment (the limit sheet itself shows the offer)."""
+        today = self.today()
+        if not self.game.offer_due(reason, today):
+            return False
+        self.game.mark_offer(reason, today)
+        self.save()
+        if reason != "limit":
+            self.notice.say(voice.say(f"premium_{reason}", name=premium.PREMIUM_NAME),
+                            ft.Icons.WORKSPACE_PREMIUM)
+        return True
 
     # ------------------------------------------------------------------ navigation
     def go(self, index: int) -> None:

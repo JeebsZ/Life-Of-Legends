@@ -718,9 +718,10 @@ def accuracy(card: StudyCard) -> float | None:
 
 
 def weak_cards(deck: StudyDeck) -> list[StudyCard]:
-    """Seen cards that keep slipping (box 0-1 or under WEAK_ACCURACY right), weakest first."""
+    """Seen cards that keep slipping (last answer missed = box 0, or under WEAK_ACCURACY
+    right overall), weakest first."""
     weak = [c for c in deck.cards
-            if c.seen and (c.box <= 1 or (accuracy(c) or 0) < WEAK_ACCURACY)]
+            if c.seen and (c.box == 0 or (accuracy(c) or 0) < WEAK_ACCURACY)]
     return sorted(weak, key=lambda c: (accuracy(c) or 0, c.box, -c.seen))
 
 
@@ -852,7 +853,7 @@ class StudyMixin:
         deck's daily limit after today's sessions."""
         deck = self.deck(deck_id)
         due = [c for c in deck.cards if is_due(c, today)]
-        due.sort(key=lambda c: (c.box, c.due or "", c.seen == 0))
+        due.sort(key=lambda c: (c.box, c.seen == 0, c.due or ""))  # misses before new
         limit = self.deck_limit(deck)
         if not limit:
             return due

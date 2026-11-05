@@ -2,7 +2,8 @@ from lol.ui import voice
 
 SAMPLE = {"xp": 40, "path": "Warrior", "level": 3, "skill": "Onion Dicing", "title": "Read",
           "minutes": "10 min", "difficulty": "beginner-friendly", "bill": "Phone bill",
-          "when": "is due in 2 days", "reward": "Movie night", "theme": "Ocean"}
+          "when": "is due in 2 days", "reward": "Movie night", "theme": "Ocean",
+          "name": "Legends+"}
 
 GUILT = ("missed", "failed", "lazy", "should have", "behind", "disappoint")
 

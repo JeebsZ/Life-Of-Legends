@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import flet as ft
 
 from lol.core.models import Insight
+from lol.core.premium import PREMIUM_NAME
 from lol.ui import components as ui
 from lol.ui import sfx
 from lol.ui.screens import common
@@ -72,12 +73,23 @@ class InsightsScreen:
         self._refresh()
 
     def _set_range(self, v: str) -> None:
+        app = self.app
+        cutoff = app.game.history_cutoff("insights", app.today())
+        if cutoff is not None and int(v) > (app.today() - cutoff).days + 1:
+            sfx.play("error_soft")
+            app.offer_premium("limit")
+            app.toast(f"30 and 90 days come with {PREMIUM_NAME}. The last 7 days stay free.",
+                      ft.Icons.WORKSPACE_PREMIUM)
+            self._refresh()  # the segment snaps back
+            return
         sfx.play("toggle")
         self.days = int(v)
         self._refresh()
 
     def render(self) -> None:
         today = self.app.today()
+        if self.app.game.history_cutoff("insights", today) is not None:
+            self.days = 7  # premium ended: back to the free window
         start = today - timedelta(days=self.days - 1)
         items: list[ft.Control] = [
             ft.Row([common.segmented(RANGES, str(self.days), on_change=self._set_range)],

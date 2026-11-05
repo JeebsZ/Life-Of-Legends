@@ -22,11 +22,12 @@ from typing import TYPE_CHECKING, Any
 import flet as ft
 import flet.canvas as cv
 
+from lol.core import premium
 from lol.core import run as rcore
 from lol.core.models import RunEntry
 from lol.core.run_cues import CUE_EVERY, CueCoach
 from lol.core.runlog import CHALLENGE_COINS, CHALLENGE_XP, MIN_LOG_M, PACE_BADGES, TIER_BY_ID
-from lol.ui import audio, gps, sfx
+from lol.ui import ads, audio, gps, sfx
 from lol.ui import components as ui
 from lol.ui import theme as th
 from lol.ui.screens import common
@@ -119,6 +120,7 @@ class RunScreen:
         self.gen = 0
         self.result: RunEntry | None = None
         self.result_new = False  # the summary is of a run just finished
+        self.tracking = "full"  # "full" | "basic" (free run without the stretch ad)
         self.list = common.screen_list()
         self.view = ft.Container(self.list, expand=True, key="run")
         self._last_follow = 0.0
@@ -220,6 +222,14 @@ class RunScreen:
         items.append(ft.Container(
             common.primary_button("Start " + MODE_INFO[mode][0].lower(), self._start,
                                   icon=ft.Icons.PLAY_ARROW), height=56))
+        if g.is_premium(today):  # free runs get the stretch guide on the Start sheet
+            items.append(ft.Row([common.secondary_button(
+                "Stretch first (optional)", self._stretch_only,
+                icon=ft.Icons.SPORTS_GYMNASTICS, color=ROUTE_COLOR)]))
+        else:
+            items.append(ft.Container(common.hint(
+                "Free runs start with an optional stretch + short ad for full tracking."),
+                alignment=ft.Alignment.CENTER))
         items.append(self._options_card())
         items.append(self._body_card())
         items += self._bests(lad)
@@ -492,26 +502,47 @@ class RunScreen:
         return out
 
     def _history(self) -> list[ft.Control]:
-        runs = self.app.game.runs()[:30]
+        g, today = self.app.game, self.app.today()
+        cutoff = g.history_cutoff("run_history", today)
+        every = g.runs()
+        runs = [r for r in every if cutoff is None or r.day >= cutoff.isoformat()]
         out: list[ft.Control] = [common.section("History")]
         if not runs:
             out.append(common.hint("  Your tracked walks and runs show up here."))
+        hide = self._hidden_stats
         for r in runs:
             d = date.fromisoformat(r.day)
             pace = rcore.fmt_pace(rcore.pace_s_per_km(r.distance_m, r.moving_s))
+            if hide(r):  # basic run: steps + time only
+                line = f"{d:%a} {common.short_date(d)} · {rcore.fmt_duration(r.moving_s)}"
+                head = f"{r.steps:,} steps (est.) · basic"
+            else:
+                line = (f"{d:%a} {common.short_date(d)} · "
+                        f"{rcore.fmt_duration(r.moving_s)} · {pace} /km")
+                head = f"{km(r.distance_m)} km {MODE_INFO[r.mode][0].lower()}"
             out.append(common.card(ft.Row([
                 route_thumb(r.route),
                 ft.Column([
-                    ft.Text(f"{km(r.distance_m)} km {MODE_INFO[r.mode][0].lower()}",
-                            size=Type.BODY, weight=ft.FontWeight.W_700, color=C.TEXT),
-                    common.hint(f"{d:%a} {common.short_date(d)} · "
-                                f"{rcore.fmt_duration(r.moving_s)} · {pace} /km"),
+                    ft.Text(head, size=Type.BODY, weight=ft.FontWeight.W_700, color=C.TEXT),
+                    common.hint(line),
                 ], spacing=2, tight=True, expand=True),
                 ft.Icon(ft.Icons.EMOJI_EVENTS, color=C.ACCENT, size=18, visible=bool(r.cleared)),
                 ft.Icon(ft.Icons.CHEVRON_RIGHT, color=C.TEXT_DIM),
             ], spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 padding=Space.SM, on_click=lambda e, rid=r.id: self._open_run(rid), ink=True))
+        older = len(every) - len(runs)
+        if older:
+            out.append(ft.Row([ft.TextButton(
+                f"{older} older session{'s' if older != 1 else ''} kept · see all with "
+                f"{premium.PREMIUM_NAME}", icon=ft.Icons.WORKSPACE_PREMIUM,
+                on_click=lambda e: self.app.open_sub("premium"),
+                style=ft.ButtonStyle(color="#F5C66B"))],
+                alignment=ft.MainAxisAlignment.CENTER))
         return out
+
+    def _hidden_stats(self, r: RunEntry) -> bool:
+        """A basic run shows steps + time only, until premium."""
+        return r.basic and not self.app.game.is_premium(self.app.today())
 
     def _open_run(self, run_id: str) -> None:
         sfx.play("tab_open")
@@ -522,6 +553,8 @@ class RunScreen:
     def _build_live(self) -> None:
         big = {"weight": ft.FontWeight.W_900, "color": C.TEXT}
         self.l_dist = ft.Text("0.00", size=56, **big)
+        self.l_steps = ft.Text("0", size=56, **big)  # basic tracking: steps + time
+        self.l_btime = ft.Text("0:00", size=Type.HEADLINE + 4, **big)
         self.l_time = ft.Text("0:00", size=Type.HEADLINE + 4, **big)
         self.l_pace = ft.Text("-:--", size=Type.HEADLINE + 4, **big)
         self.l_avg = ft.Text("-:--", size=Type.HEADLINE + 4, **big)
@@ -551,16 +584,34 @@ class RunScreen:
             return ft.Column([ctrl, common.hint(label)], spacing=0, tight=True, expand=True,
                              horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
+        self.map_wrap = ft.Container(self.map_host,
+                                     padding=ft.Padding.symmetric(horizontal=Space.GUTTER))
+        self.full_stats = ft.Column([
+            ft.Row([self.l_dist, ft.Text("km", size=Type.TITLE, color=C.TEXT_DIM)],
+                   spacing=Space.SM, alignment=ft.MainAxisAlignment.CENTER,
+                   vertical_alignment=ft.CrossAxisAlignment.END),
+            ft.Row([stat(self.l_time, "moving time"), stat(self.l_pace, "pace /km"),
+                    stat(self.l_avg, "avg /km")]),
+        ], spacing=Space.SM, tight=True)
+        self.basic_stats = ft.Column([
+            ft.Row([self.l_steps, ft.Text("steps (est.)", size=Type.TITLE,
+                                          color=C.TEXT_DIM)],
+                   spacing=Space.SM, alignment=ft.MainAxisAlignment.CENTER,
+                   vertical_alignment=ft.CrossAxisAlignment.END),
+            ft.Row([stat(self.l_btime, "moving time")]),
+            common.card(ft.Row([
+                ft.Icon(ft.Icons.LOCK_OPEN, size=18, color="#F5C66B"),
+                ft.Text("Basic tracking: steps and time. Unlock full tracking: watch the "
+                        f"stretch ad next run or go {premium.PREMIUM_NAME}.",
+                        size=Type.CAPTION, color=C.TEXT_DIM, expand=True)],
+                spacing=Space.SM), padding=Space.SM),
+        ], spacing=Space.SM, tight=True, visible=False)
         self.live_view = ft.Column([
-            ft.Container(self.map_host, padding=ft.Padding.symmetric(horizontal=Space.GUTTER)),
+            self.map_wrap,
             ft.Container(ft.Column([
                 ft.Row([self.l_dot, self.l_status, ft.Container(expand=True), self.l_banner],
                        spacing=Space.SM),
-                ft.Row([self.l_dist, ft.Text("km", size=Type.TITLE, color=C.TEXT_DIM)],
-                       spacing=Space.SM, alignment=ft.MainAxisAlignment.CENTER,
-                       vertical_alignment=ft.CrossAxisAlignment.END),
-                ft.Row([stat(self.l_time, "moving time"), stat(self.l_pace, "pace /km"),
-                        stat(self.l_avg, "avg /km")]),
+                self.full_stats, self.basic_stats,
                 self.l_goal, self.l_goal_txt,
             ], spacing=Space.SM, tight=True),
                 padding=ft.Padding.symmetric(horizontal=Space.GUTTER)),
@@ -610,6 +661,12 @@ class RunScreen:
         if tr is None:
             return
         now = self.gps.now()
+        basic = self.tracking == "basic"
+        self.map_wrap.visible = self.full_stats.visible = not basic
+        self.basic_stats.visible = basic
+        if basic:
+            self.l_steps.value = f"{self._steps_now():,}"
+            self.l_btime.value = rcore.fmt_duration(tr.moving_s)
         self.l_dist.value = km(tr.distance_m)
         self.l_time.value = rcore.fmt_duration(tr.moving_s)
         self.l_pace.value = rcore.fmt_pace(tr.current_pace(now))
@@ -626,8 +683,9 @@ class RunScreen:
             self.l_goal.visible = self.l_goal_txt.visible = True
             self.l_goal.value = min(1.0, tr.distance_m / t.meters)
             left = t.meters - tr.distance_m
-            self.l_goal_txt.value = (f"Goal {t.label}: {left / 1000:.2f} km to go" if left > 0
-                                     else f"Goal {t.label} reached!")
+            self.l_goal_txt.value = (f"Goal {t.label} reached!" if left <= 0
+                                     else f"Goal {t.label}" if basic
+                                     else f"Goal {t.label}: {left / 1000:.2f} km to go")
         else:
             self.l_goal.visible = self.l_goal_txt.visible = False
         self.b_pause.content.icon = ft.Icons.PLAY_ARROW if tr.paused else ft.Icons.PAUSE
@@ -671,12 +729,49 @@ class RunScreen:
 
             await self.live_map.move_to(destination=fm.MapLatitudeLongitude(*here))
 
+    def _steps_now(self) -> int:
+        tr = self.tracker
+        if tr is None:
+            return 0
+        return rcore.steps_for(rcore.chunks(tr.points),
+                               self.app.game.data.body.height_cm or rcore.DEFAULT_HEIGHT_CM,
+                               tr.mode)
+
+    def _stretch_only(self, _: Any = None) -> None:
+        from lol.ui.screens.stretch import open_stretch_sheet
+
+        g, today = self.app.game, self.app.today()
+        open_stretch_sheet(self.app, with_ad=False,
+                           notes=g.run_advice(self.settings.mode, today).notes,
+                           on_start=lambda res: self.app.page.run_task(self._start))
+
     async def _start(self, _: Any = None) -> None:
+        """Premium (or no ad to show): straight to full tracking. Free: the stretch sheet
+        with the optional ad; watched -> full, skipped/declined -> basic."""
         if self.perm != gps.GRANTED:
             sfx.play("error_soft")
             self.app.toast("Allow location first, or log the session by hand.",
                            ft.Icons.GPS_OFF)
             return
+        g, today = self.app.game, self.app.today()
+        if g.is_premium(today) or not ads.can_show(self.app):
+            await self._begin(premium.run_tracking(g.is_premium(today), "unavailable"))
+            return
+        from lol.ui.screens.stretch import open_stretch_sheet
+
+        def go(res: str | None) -> None:
+            async def later() -> None:
+                await asyncio.sleep(0.35)  # let the sheet close first
+                await self._begin(premium.run_tracking(False, res))
+            self.app.page.run_task(later)
+
+        open_stretch_sheet(self.app, with_ad=True,
+                           notes=g.run_advice(self.settings.mode, today).notes, on_start=go)
+
+    async def _begin(self, tracking: str) -> None:
+        if self.phase == "live":
+            return
+        self.tracking = tracking
         g, s = self.app.game, self.settings
         now = self.gps.now()
         self.tracker = rcore.Tracker(s.mode, now)
@@ -720,8 +815,8 @@ class RunScreen:
 
     def _cues(self, now: float) -> None:
         tr, coach = self.tracker, self.coach
-        if tr is None or coach is None or tr.paused:
-            return
+        if tr is None or coach is None or tr.paused or self.tracking == "basic":
+            return  # voice cues are part of full tracking
         steps = rcore.steps_for(rcore.chunks(tr.points),
                                 self.app.game.data.body.height_cm or rcore.DEFAULT_HEIGHT_CM,
                                 tr.mode)
@@ -833,7 +928,8 @@ class RunScreen:
 
         try:
             c = await app.award(lambda: g.log_run(stats, today, started=self.started,
-                                                  goal=goal), line=line)
+                                                  goal=goal, basic=self.tracking == "basic"),
+                                line=line)
         except ValueError as exc:
             app.error(f"Couldn't save it: {exc}")
             return
@@ -849,6 +945,8 @@ class RunScreen:
 
     # ------------------------------------------------------------------ summary
     def _summary(self, r: RunEntry) -> list[ft.Control]:
+        if self._hidden_stats(r):
+            return self._basic_summary(r)
         route = [[tuple(p) for p in seg] for seg in r.route]
         pts = [p for seg in route for p in seg]
         m, _, marks = self._make_map(pts[0] if pts else MANILA, route, live=False,
@@ -921,6 +1019,56 @@ class RunScreen:
             rows = [(str(i + 1), float(s), rcore.fmt_pace(s)) for i, s in enumerate(r.splits)]
             items.append(common.section("Splits (per km)"))
             items.append(common.card(common.bar_chart(rows, height=120, color=ROUTE_COLOR)))
+        if r.xp or r.coins:
+            items.append(ft.Row([ui.xp_chip(r.xp), ui.coin_chip(r.coins)], spacing=Space.SM,
+                                alignment=ft.MainAxisAlignment.CENTER))
+        items.append(ft.Row([common.primary_button("Done", self._back_to_pre,
+                                                   icon=ft.Icons.CHECK)]))
+        if not self.result_new:
+            items.append(ft.Row([common.secondary_button(
+                "Delete this session", lambda e: self._delete(r.id),
+                icon=ft.Icons.DELETE_OUTLINE, color=C.DANGER)]))
+        return items
+
+    def _basic_summary(self, r: RunEntry) -> list[ft.Control]:
+        """Basic tracking (free, stretch ad skipped): steps + time only. Map, pace, splits
+        and kcal stay hidden; going premium reveals them (the data is the user's anyway and
+        is in every export)."""
+        d = date.fromisoformat(r.day)
+
+        def stat(value: str, label: str) -> ft.Control:
+            return ft.Column([ft.Text(value, size=Type.HEADLINE + 4, weight=ft.FontWeight.W_800,
+                                      color=C.TEXT), common.hint(label)],
+                             spacing=0, tight=True, col=6,
+                             horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+
+        items: list[ft.Control] = [
+            ft.Text(f"{MODE_INFO[r.mode][0]} · {d:%A} {common.short_date(d)}"
+                    + (f" · {r.started}" if r.started else ""), size=Type.TITLE,
+                    weight=ft.FontWeight.W_800, color=C.TEXT),
+            common.card(ft.ResponsiveRow([
+                stat(f"{r.steps:,}", "steps (est.)"),
+                stat(rcore.fmt_duration(r.moving_s), "moving time"),
+            ], run_spacing=Space.MD)),
+            common.card(ft.Column([
+                ft.Row([ft.Icon(ft.Icons.LOCK, color="#F5C66B", size=18),
+                        ft.Text("Basic tracking", size=Type.BODY, weight=ft.FontWeight.W_700,
+                                color=C.TEXT)], spacing=Space.SM),
+                common.hint("Map, pace, splits and kcal are hidden for this run. Unlock full "
+                            "tracking: watch the stretch ad next run or go "
+                            f"{premium.PREMIUM_NAME}."),
+                ft.Row([common.secondary_button(f"See {premium.PREMIUM_NAME}",
+                                                lambda e: self.app.open_sub("premium"),
+                                                icon=ft.Icons.WORKSPACE_PREMIUM,
+                                                color="#F5C66B")]),
+            ], spacing=Space.SM, tight=True), padding=Space.MD),
+        ]
+        if r.cleared:
+            labels = ", ".join(TIER_BY_ID[t].label for t in r.cleared if t in TIER_BY_ID)
+            items.append(common.card(ft.Row([
+                ft.Icon(ft.Icons.EMOJI_EVENTS, color=C.ACCENT, size=26),
+                ft.Text(f"Tier cleared: {labels}", size=Type.BODY, weight=ft.FontWeight.W_800,
+                        color=C.TEXT, expand=True)], spacing=Space.MD), tint="#F5C66B"))
         if r.xp or r.coins:
             items.append(ft.Row([ui.xp_chip(r.xp), ui.coin_chip(r.coins)], spacing=Space.SM,
                                 alignment=ft.MainAxisAlignment.CENTER))

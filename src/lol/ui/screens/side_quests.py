@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 import flet as ft
 
 from lol.core.models import RANK_NAMES, CatalogChain, CatalogStep, SideQuest
+from lol.ui import ads, sfx, voice
 from lol.ui import components as ui
-from lol.ui import sfx, voice
 from lol.ui import theme as th
 from lol.ui.screens import common, editors
 from lol.ui.theme import C, Motion, Radius, Size, Space, Type
@@ -239,9 +239,39 @@ class SideQuestsSection:
             padding=Space.MD, border=ft.Border.all(1, C.a(pc, 0.3)),
             opacity=1 if can else 0.75)
 
+    def _chain_cap(self) -> None:
+        """Free keeps a few custom chains running at once (preset chains are never limited)."""
+        from lol.core.premium import ACTIVE_CAPS, PREMIUM_NAME
+
+        app = self.app
+        sfx.play("error_soft")
+        app.offer_premium("limit")
+        cap = ACTIVE_CAPS["custom_chains"][0]
+
+        def premium(_: object = None) -> None:
+            common.close(sheet)
+            app.open_sub("premium")
+
+        def presets(_: object = None) -> None:
+            common.close(sheet)
+            self.open_catalog()
+
+        sheet = common.open_sheet(app.page, f"{cap} custom side quests are running", [
+            common.hint(f"Free keeps {cap} of your own chains going at a time. Finish or "
+                        "abandon one to make another. Preset chains are always open."),
+            ft.Row([common.secondary_button("Browse preset chains", presets,
+                                            icon=ft.Icons.ROUTE)]),
+            ft.Row([common.secondary_button(f"See {PREMIUM_NAME} (unlimited)", premium,
+                                            icon=ft.Icons.WORKSPACE_PREMIUM,
+                                            color="#F5C66B")]),
+        ])
+
     # ------------------------------------------------------------------ custom sheet
     def open_custom(self) -> None:
         app = self.app
+        if not app.game.can_add_custom_chain(app.today()):
+            self._chain_cap()
+            return
         state: dict = {"path": "scholar", "diff": "1", "ordered": False, "target": None}
         name = common.text_field("Skill name (e.g. Guitar Basics)", autofocus=True)
         name.capitalization = ft.TextCapitalization.WORDS
@@ -292,6 +322,12 @@ class SideQuestsSection:
             name.error_text = None
             # the overlay effect sits under dialogs: step out of the sheet while Luma thinks
             common.close(sheet)
+            if not await ads.limit_gate(app, "generate_steps", manual=lambda: None,
+                                        manual_label="Type the steps myself"):
+                if not app.showing("premium"):
+                    common.reopen(app.page, sheet)
+                return
+            ads.spend(app, "generate_steps")
             specs = await ui.lumen_analyze(
                 app.page, DRAFT_STAGES, lambda: app.game.generate_chain(skill, state["path"]),
                 seconds=2.5)

@@ -23,8 +23,8 @@ from lol.core.body import meal_for_hour
 from lol.core.foods import Food
 from lol.core.models import MEAL_TYPES, MealItem
 from lol.core.recognize import Candidate, ManualRecognizer, Recognizer, confidence_label
+from lol.ui import ads, sfx
 from lol.ui import components as ui
-from lol.ui import sfx
 from lol.ui.screens import common
 from lol.ui.screens.health import MACRO_COLORS, macro_row, num_field, parse_num
 from lol.ui.theme import C, Radius, Size, Space, Type
@@ -451,7 +451,8 @@ class MealScreen:
                                                              icon=ft.Icons.PHOTO_CAMERA),
                                        common.secondary_button("Add food", self._add_quick,
                                                                icon=ft.Icons.ADD)],
-                                       spacing=Space.SM)]
+                                       spacing=Space.SM),
+                                   self._scans_left()]
         meals = g.meals_on(self.day)
         for mt in MEAL_TYPES:
             rows = [m for m in meals if m.meal == mt]
@@ -461,6 +462,16 @@ class MealScreen:
                   common.section("Settings"), self._settings(), common.section("My foods"),
                   self._my_foods()]
         self.list.controls = items
+
+    def _scans_left(self) -> ft.Control:
+        """Remaining photo scans (free: today, premium: this week). Manual adds are free."""
+        g, today = self.app.game, self.app.today()
+        left = g.remaining("meal_scan", today)
+        span = "this week" if g.is_premium(today) else "today"
+        txt = ("Unlimited scans" if left is None else
+               f"{left} scan{'s' if left != 1 else ''} left {span} · adding by hand is "
+               "always free")
+        return ft.Container(common.hint(txt), alignment=ft.Alignment.CENTER)
 
     def _day_nav(self) -> ft.Control:
         today = self.app.today()
@@ -670,9 +681,14 @@ class MealScreen:
         self._busy = True
         try:
             app = self.app
+            if not await ads.limit_gate(app, "meal_scan", manual=self._add_quick,
+                                        manual_label="Add food by hand"):
+                return
             data = await capture(app)
             if not data:
                 return
+            ads.spend(app, "meal_scan")  # counted once a photo was really taken
+            self._refresh()
             sfx.play("shutter")
             rec = get_recognizer(app.page)
             path = str(storage.data_dir() / SCAN_TMP)

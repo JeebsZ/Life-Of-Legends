@@ -54,6 +54,7 @@ SCAN_STAGES = ("SCANNING PAGE…", "READING TEXT…", "FINDING TERMS…", "DRAFT
 RESULT_STAGES = ("GRADING…", "FINDING WEAK SPOTS…", "RESULTS READY")
 SCAN_TMP = "study_scan_tmp.jpg"
 ADVANCE_S = 0.75  # a right answer moves on by itself after this long
+SWIPE_PX = 80  # a flip card dragged this far sideways counts as a rating
 FORMATS_HINT = ("Luma spots: term - definition · term: definition · term = definition · "
                 "Q: … A: … · numbered lists · a heading with its text below · "
                 "term<TAB>definition (spreadsheet copy).")
@@ -510,11 +511,16 @@ class DeckScreen:
                       ft.Icons.DOCUMENT_SCANNER)
             self._paste()
             return
+        from lol.ui import ads  # premium limits: note scans (typing/pasting stays free)
         from lol.ui.screens.meal import capture  # camera sheet / photo picker
 
+        if not await ads.limit_gate(app, "note_scan", manual=self._paste,
+                                    manual_label="Paste or type the notes"):
+            return
         data = await capture(app)
         if not data:
             return
+        ads.spend(app, "note_scan")
         sfx.play("shutter")
         path = storage.data_dir() / SCAN_TMP
         await asyncio.to_thread(path.write_bytes, data)
@@ -868,9 +874,7 @@ class RunScreen:
                                           vertical_alignment=ft.CrossAxisAlignment.CENTER),
                                    padding=ft.Padding.symmetric(horizontal=Space.GUTTER,
                                                                 vertical=Space.SM))
-        self.body = ft.AnimatedSwitcher(ft.Container(), duration=200, reverse_duration=60,
-                                        transition=ft.AnimatedSwitcherTransition.FADE,
-                                        switch_in_curve=Motion.EASE_CUBIC)
+        self.body = ft.Container(ft.Container(), opacity=1, offset=ft.Offset(0, 0))
         self.scroll = ft.ListView([self.body], expand=True, padding=ft.Padding.only(
             left=Space.GUTTER, right=Space.GUTTER, bottom=Space.XXL))
         self.view = ft.Container(ft.Column([self.header, self.scroll], spacing=0, expand=True),
@@ -976,7 +980,19 @@ class RunScreen:
             view.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
         self.body.content = view
         if update:
-            ui.refresh(self.view)
+            self.app.page.run_task(self._slide_in)
+
+    async def _slide_in(self) -> None:
+        """New question: a short slide + fade in from the right."""
+        b = self.body
+        b.animate_opacity = b.animate_offset = ui.SNAP
+        b.opacity, b.offset = 0, ft.Offset(0.06, 0)
+        ui.refresh(self.view)
+        await asyncio.sleep(0.03)
+        b.animate_opacity = Motion.anim(180)
+        b.animate_offset = Motion.anim(220, Motion.EASE_CUBIC)
+        b.opacity, b.offset = 1, ft.Offset(0, 0)
+        ui.refresh(b)
 
     def _prompt(self, q: Question, size: int = Type.HEADLINE) -> ft.Control:
         parts: list[ft.Control] = []
@@ -1097,6 +1113,7 @@ class RunScreen:
                 ft.Text(line, size=Type.BODY, color=C.TEXT, weight=ft.FontWeight.W_600,
                         expand=True)], spacing=Space.SM)
             check_btn.visible = False
+            ui.refresh(field, check_btn, result)
             await self._feedback(g.correct, field_box, q)
 
         field.on_submit = check
@@ -1122,7 +1139,7 @@ class RunScreen:
             height=260, border_radius=Radius.LG, alignment=ft.Alignment.CENTER,
             padding=Space.XL, bgcolor=C.a(STUDY, 0.1), border=ft.Border.all(1.5, C.a(STUDY,
                                                                                     0.5)),
-            scale=1, animate_scale=Motion.anim(120, Motion.EASE),
+            scale=1, animate_scale=Motion.anim(120, Motion.EASE), offset=ft.Offset(0, 0),
             animate=Motion.anim(Motion.FADE_MS))
         ratings = ft.Row(spacing=Space.XS, visible=False)
 
@@ -1155,16 +1172,33 @@ class RunScreen:
             ratings.controls.append(ft.FilledButton(
                 label, height=56, expand=True,
                 style=ft.ButtonStyle(bgcolor=C.a(col, 0.22), color=C.TEXT,
+                                     padding=ft.Padding.symmetric(horizontal=2),
                                      side=ft.BorderSide(1, C.a(col, 0.7)),
                                      shape=ft.RoundedRectangleBorder(radius=Radius.MD)),
                 on_click=lambda e, r=r: self.app.page.run_task(rate, r)))
 
-        def swiped(e: ft.DragEndEvent) -> None:
-            v = e.primary_velocity or 0
-            if abs(v) > 250:
-                self.app.page.run_task(rate, "good" if v > 0 else "again")
+        drag = {"dx": 0.0}
+
+        def drag_start(_: Any) -> None:
+            drag["dx"] = 0.0
+            card.animate_offset = ui.SNAP
+
+        def dragging(e: ft.DragUpdateEvent) -> None:
+            drag["dx"] += float(e.primary_delta or 0)
+            card.offset = ft.Offset(max(-0.25, min(0.25, drag["dx"] / 600)), 0)
+            ui.refresh(card)
+
+        def swiped(_: ft.DragEndEvent) -> None:
+            dx = drag["dx"]
+            card.animate_offset = Motion.anim(200, Motion.EASE_CUBIC)
+            card.offset = ft.Offset(0, 0)
+            ui.refresh(card)
+            if abs(dx) >= SWIPE_PX and not self.locked:
+                self.app.page.run_task(rate, "good" if dx > 0 else "again")
 
         gesture = ft.GestureDetector(card, on_tap=lambda e: self.app.page.run_task(flip),
+                                     on_horizontal_drag_start=drag_start,
+                                     on_horizontal_drag_update=dragging,
                                      on_horizontal_drag_end=swiped)
         self.next_slot = ft.Container()
         return ft.Column([gesture, tap_hint, ratings, self.next_slot], spacing=Space.MD,
@@ -1212,7 +1246,7 @@ class RunScreen:
         await ui.lumen_analyze(app.page, RESULT_STAGES, seconds=1.8)
         self.header.visible = False
         self.body.content = self._results(run, right, total, seconds, deck)
-        ui.refresh(self.view)
+        await self._slide_in()
         c = await app.award(
             lambda: app.game.finish_study(self.deck_id, self.mode, run.results(), app.today(),
                                           seconds, run.ratings),
@@ -1221,7 +1255,9 @@ class RunScreen:
             cleared="Strong score" if strong else None)
         self.xp_line.value = (f"+{c.xp} XP · +{c.coins} coins" if c.coins
                               else f"+{c.xp} XP" if c.xp
-                              else "Progress saved. XP for this deck is used up today.")
+                              else f"Progress saved. Sessions of {study.STUDY_MIN_CARDS}+ cards "
+                                   "earn XP." if total < study.STUDY_MIN_CARDS
+                              else "Progress saved. Today's XP for this deck is earned.")
         ui.refresh(self.xp_line)
         if not c.xp:
             sfx.play("scan_done")

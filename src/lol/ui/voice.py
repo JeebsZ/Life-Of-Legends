@@ -151,6 +151,21 @@ LINES: dict[str, tuple[str, ...]] = {
         "Luma Report · this week",
         "Luma Report · 7-day analysis",
     ),
+    # --- premium (soft offers: once per reason, never pushy; the core stays free) ---------
+    "premium_level_up": (
+        "Proposal: {name} adds a big weekly bank and no ads. More → {name}, whenever you like.",
+        "Proposal: Should you want more scans and no ads, {name} is in More. No rush.",
+    ),
+    "premium_day3": (
+        ("Notice: Three days in. If you ever want more scans and full run tracking every "
+         "time, {name} is in More. The core stays free."),
+        ("Notice: Day three. {name} is there if you want a bigger weekly bank. Everything "
+         "you use now stays free."),
+    ),
+    "premium_on": (
+        "Confirmed: {name} active. No ads, weekly bank unlocked.",
+        "Confirmed: {name} unlocked. The weekly bank is yours.",
+    ),
 }
 
 DIFFICULTY_WORDS = {1: "beginner-friendly", 2: "a steady challenge", 3: "a real stretch"}
