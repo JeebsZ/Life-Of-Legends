@@ -1,31 +1,106 @@
+"""Adventure Run: a light auto-battler layered on a GPS walk/run. Pure logic, no flet.
+
+Every SPAWN_INTERVAL_M of distance a pack spawns (2-3 NORMAL + 1 LEADER, and a BOSS_CHANCE
+boss). Each tick, pace becomes DPS (see calculate_dps); the primary target (LOWEST_HP by
+default) takes the full tick damage and up to CLEAVE_TARGETS other mobs take CLEAVE_RATIO
+splash. Crossing a milestone (1K/3K/5K/10K) fires a Companion Shockwave split over the pack.
+Defeats pay XP, coins and a chance at a cosmetic fragment (by tier).
+
+The UI reads `AdventureEvent`s returned by update_tick() to drive sounds and animations.
+Sprites live in src/assets/creatures/<sprite>; this module only knows the file names.
+Rewards are tallied on the engine; they are not written into the save.
+"""
+
 from __future__ import annotations
 
 import random
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
+# --- Balance (tweak here) -------------------------------------------------------------------
+SPAWN_INTERVAL_M = 350.0
+MILESTONES_M: tuple[int, ...] = (1000, 3000, 5000, 10000)
+BOSS_CHANCE = 0.20
+NORMAL_COUNT = (2, 3)  # inclusive range of NORMAL mobs per pack
+HP_SCALE_PER_KM = 0.15  # packs get +15% HP per km already covered
 
-class CreatureTier(str, Enum):
+STILL_KMH = 2.5
+WALK_MAX_KMH = 5.5
+JOG_MAX_KMH = 8.5
+WALK_DPS_PER_KMH = 4.5
+JOG_DPS_PER_KMH = 6.5
+SPRINT_DPS_PER_KMH = 9.0
+JOG_CRIT = (0.25, 1.5)  # (chance, multiplier)
+SPRINT_CRIT = (0.45, 2.0)
+
+CLEAVE_RATIO = 0.45
+CLEAVE_TARGETS = 2
+SURGE_BASE = 250.0
+SURGE_PER_KM = 50.0
+
+FRAGMENT_CHANCE = {"normal": 0.05, "leader": 0.25, "boss": 0.80}
+
+
+class CreatureTier(StrEnum):
     NORMAL = "normal"
     LEADER = "leader"
     BOSS = "boss"
 
 
-class TargetMode(str, Enum):
+class TargetMode(StrEnum):
     LOWEST_HP = "lowest_hp"
     STRONGEST = "strongest"
     MANUAL = "manual"
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     SPAWN_CLUSTER = "spawn_cluster"
     DAMAGE_DEALT = "damage_dealt"
     MULTI_HIT = "multi_hit"
     CREATURE_DEFEATED = "creature_defeated"
     MILESTONE_SURGE = "milestone_surge"
     CLUSTER_CLEARED = "cluster_cleared"
+
+
+@dataclass(frozen=True)
+class CreatureDef:
+    key: str
+    name: str
+    family: str
+    tier: CreatureTier
+    sprite: str  # file name under src/assets/creatures/
+    hp: tuple[int, int]
+    xp: tuple[int, int]
+    coins: tuple[int, int]
+
+
+def _d(name: str, family: str, tier: CreatureTier, hp: tuple[int, int], xp: tuple[int, int],
+       coins: tuple[int, int]) -> CreatureDef:
+    return CreatureDef(name, name, family, tier, f"{name}.png", hp, xp, coins)
+
+
+_N, _L, _B = CreatureTier.NORMAL, CreatureTier.LEADER, CreatureTier.BOSS
+CREATURES: dict[str, CreatureDef] = {c.key: c for c in (
+    _d("Goblin Scout", "goblin", _N, (45, 65), (12, 18), (5, 10)),
+    _d("Goblin Soldier", "goblin", _L, (130, 180), (40, 60), (25, 40)),
+    _d("Goblin General", "goblin", _B, (380, 500), (160, 250), (90, 150)),
+    _d("Slime", "slime", _N, (40, 55), (10, 16), (4, 9)),
+    _d("BigSlime", "slime", _L, (120, 170), (38, 55), (22, 36)),
+    _d("KingSlime", "slime", _B, (360, 480), (150, 230), (80, 140)),
+    _d("Bat", "bat", _N, (35, 50), (11, 17), (5, 9)),
+    _d("BatKing", "bat", _B, (340, 460), (150, 240), (85, 145)),
+    _d("Boar", "boar", _N, (50, 70), (13, 19), (6, 11)),
+    _d("WildBoar", "boar", _L, (140, 190), (42, 62), (26, 42)),
+    _d("HugeBoar", "boar", _B, (400, 520), (170, 260), (95, 155)),
+)}
+FAMILIES: tuple[str, ...] = ("goblin", "slime", "bat", "boar")
+
+
+def roster(tier: CreatureTier, family: str | None = None) -> list[CreatureDef]:
+    return [c for c in CREATURES.values()
+            if c.tier == tier and (family is None or c.family == family)]
 
 
 @dataclass
@@ -52,6 +127,7 @@ class Creature:
     xp_reward: int
     coin_reward: int
     cosmetic_fragment_chance: float = 0.0
+    sprite: str = ""
 
     @property
     def is_alive(self) -> bool:
@@ -64,8 +140,8 @@ class Creature:
         return max(0.0, min(1.0, self.current_hp / self.max_hp))
 
     def take_damage(self, amount: float) -> float:
-        """Applies damage and returns actual damage dealt."""
-        if not self.is_alive:
+        """Applies damage and returns the damage actually dealt (never more than HP left)."""
+        if not self.is_alive or amount <= 0:
             return 0.0
         actual = min(self.current_hp, amount)
         self.current_hp = max(0.0, self.current_hp - amount)
@@ -87,333 +163,199 @@ class EncounterCluster:
     def has_alive(self) -> bool:
         return any(c.is_alive for c in self.creatures)
 
-    def select_target(
-        self,
-        mode: TargetMode = TargetMode.LOWEST_HP,
-        manual_id: str | None = None,
-    ) -> Creature | None:
+    @property
+    def has_boss(self) -> bool:
+        return any(c.tier == CreatureTier.BOSS for c in self.creatures)
+
+    def select_target(self, mode: TargetMode = TargetMode.LOWEST_HP,
+                      manual_id: str | None = None) -> Creature | None:
         alive = self.alive_creatures
         if not alive:
             return None
-
         if mode == TargetMode.MANUAL and manual_id:
             for c in alive:
                 if c.id == manual_id:
                     return c
-
+            # locked target died: fall through to lowest HP so momentum never stalls
         if mode == TargetMode.STRONGEST:
-            # Boss > Leader > Normal, then highest HP
-            tier_weights = {
-                CreatureTier.BOSS: 3,
-                CreatureTier.LEADER: 2,
-                CreatureTier.NORMAL: 1,
-            }
-            return max(
-                alive,
-                key=lambda c: (tier_weights.get(c.tier, 1), c.current_hp),
-            )
-
-        # Default: Lowest HP first for satisfying fast clearing
+            weight = {CreatureTier.BOSS: 3, CreatureTier.LEADER: 2, CreatureTier.NORMAL: 1}
+            return max(alive, key=lambda c: (weight.get(c.tier, 1), c.current_hp))
         return min(alive, key=lambda c: c.current_hp)
 
 
 class AdventureEngine:
     """Core adventure battle loop and encounter system."""
 
-    DEFAULT_SPAWN_INTERVAL_M = 350.0  # Encounter cluster every 350 meters
-    MILESTONES_M: tuple[int, ...] = (1000, 3000, 5000, 10000)
+    DEFAULT_SPAWN_INTERVAL_M = SPAWN_INTERVAL_M
+    MILESTONES_M = MILESTONES_M
 
-    SLIME_NAMES: tuple[str, ...] = (
-        "Lil' Cyan Slime",
-        "Batwing Slime",
-        "Honey Bear Slime",
-        "Berry Slime",
-        "Melon Slime",
-    )
-
-    def __init__(
-        self,
-        target_mode: TargetMode = TargetMode.LOWEST_HP,
-        boss_encounter_chance: float = 0.20,
-    ) -> None:
+    def __init__(self, target_mode: TargetMode = TargetMode.LOWEST_HP,
+                 boss_encounter_chance: float = BOSS_CHANCE,
+                 rng: random.Random | None = None) -> None:
         self.target_mode = target_mode
         self.boss_encounter_chance = boss_encounter_chance
+        self.rng = rng or random.Random()
         self.active_cluster: EncounterCluster | None = None
-        self.total_distance_m: float = 0.0
-        self.next_spawn_distance_m: float = self.DEFAULT_SPAWN_INTERVAL_M
+        self.total_distance_m = 0.0
+        self.next_spawn_distance_m = SPAWN_INTERVAL_M
         self.manual_target_id: str | None = None
-
         self.cleared_milestones: set[int] = set()
-        self.total_xp_earned: int = 0
-        self.total_coins_earned: int = 0
-        self.creatures_defeated_count: int = 0
-        self.cosmetic_fragments_count: int = 0
+        self.total_xp_earned = 0
+        self.total_coins_earned = 0
+        self.creatures_defeated_count = 0
+        self.cosmetic_fragments_count = 0
 
-    def generate_cluster(
-        self, distance_m: float, force_boss: bool = False
-    ) -> EncounterCluster:
-        """Generates a pack of slimes with randomized attributes and a potential boss."""
+    # ------------------------------------------------------------------ spawning
+    def _make(self, d: CreatureDef, cluster_id: str, slot: str, hp_scale: float) -> Creature:
+        r = self.rng
+        hp = round(r.randint(*d.hp) * hp_scale, 1)
+        return Creature(
+            id=f"{cluster_id}_{slot}", name=d.name, tier=d.tier, archetype=d.family,
+            max_hp=hp, current_hp=hp, xp_reward=r.randint(*d.xp),
+            coin_reward=r.randint(*d.coins),
+            cosmetic_fragment_chance=FRAGMENT_CHANCE[d.tier.value], sprite=d.sprite)
+
+    def generate_cluster(self, distance_m: float, force_boss: bool = False,
+                         family: str | None = None) -> EncounterCluster:
+        """A themed pack: 2-3 NORMAL + 1 LEADER of one family (Bat has no leader, so its
+        packs borrow one), plus a random BOSS from any family on a BOSS_CHANCE roll."""
+        r = self.rng
         cluster_id = f"cluster_{uuid.uuid4().hex[:8]}"
-        creatures: list[Creature] = []
+        fam = family or r.choice(FAMILIES)
+        hp_scale = 1.0 + (distance_m / 1000.0) * HP_SCALE_PER_KM
+        normal = roster(_N, fam)[0]
+        creatures = [self._make(normal, cluster_id, f"m_{i}", hp_scale)
+                     for i in range(r.randint(*NORMAL_COUNT))]
+        leaders = roster(_L, fam) or roster(_L)
+        creatures.append(self._make(r.choice(leaders), cluster_id, "leader", hp_scale))
+        if force_boss or r.random() < self.boss_encounter_chance:
+            creatures.append(self._make(r.choice(roster(_B)), cluster_id, "boss", hp_scale))
+        return EncounterCluster(cluster_id, distance_m, creatures)
 
-        is_boss_pack = force_boss or (
-            random.random() < self.boss_encounter_chance
-        )
-
-        # Base pack scaling with distance (slight level scaling per km)
-        km = distance_m / 1000.0
-        hp_scale = 1.0 + (km * 0.15)
-
-        # 2-4 Normal Slimes
-        normal_count = random.randint(2, 3)
-        for i in range(normal_count):
-            name = random.choice(self.SLIME_NAMES)
-            base_hp = random.randint(40, 65) * hp_scale
-            creatures.append(
-                Creature(
-                    id=f"{cluster_id}_m_{i}",
-                    name=name,
-                    tier=CreatureTier.NORMAL,
-                    archetype="slime",
-                    max_hp=round(base_hp, 1),
-                    current_hp=round(base_hp, 1),
-                    xp_reward=random.randint(12, 18),
-                    coin_reward=random.randint(5, 10),
-                    cosmetic_fragment_chance=0.05,
-                )
-            )
-
-        # 1 Slime Leader
-        leader_hp = random.randint(120, 180) * hp_scale
-        creatures.append(
-            Creature(
-                id=f"{cluster_id}_leader",
-                name="Slime Commander",
-                tier=CreatureTier.LEADER,
-                archetype="slime_leader",
-                max_hp=round(leader_hp, 1),
-                current_hp=round(leader_hp, 1),
-                xp_reward=random.randint(40, 60),
-                coin_reward=random.randint(25, 40),
-                cosmetic_fragment_chance=0.25,
-            )
-        )
-
-        # Optional Random Boss Encounter
-        if is_boss_pack:
-            boss_hp = random.randint(350, 500) * hp_scale
-            creatures.append(
-                Creature(
-                    id=f"{cluster_id}_boss",
-                    name="Emperor Slime King",
-                    tier=CreatureTier.BOSS,
-                    archetype="slime_boss",
-                    max_hp=round(boss_hp, 1),
-                    current_hp=round(boss_hp, 1),
-                    xp_reward=random.randint(150, 250),
-                    coin_reward=random.randint(80, 150),
-                    cosmetic_fragment_chance=0.75,
-                )
-            )
-
-        return EncounterCluster(
-            cluster_id=cluster_id,
-            spawn_distance_m=distance_m,
-            creatures=creatures,
-        )
-
+    # ------------------------------------------------------------------ combat math
     def calculate_dps(self, speed_kmh: float) -> tuple[float, bool]:
-        """Calculates DPS and critical strike based on pace.
-
-        Speed bands:
-        - < 2.5 km/h: 0 DPS (stationary/paused)
-        - 2.5 - 5.5 km/h (Walking): 15-25 base DPS
-        - 5.5 - 8.5 km/h (Jogging): 35-55 DPS + 25% crit chance (1.5x)
-        - > 8.5 km/h (Sprinting): 70-110 DPS + 45% crit chance (2.0x)
-        """
-        if speed_kmh < 2.5:
+        """Pace -> (dps, is_crit). <2.5 km/h: 0. Walk: 4.5x. Jog (<=8.5): 6.5x, 25% crit
+        x1.5. Sprint: 9.0x, 45% crit x2."""
+        if speed_kmh < STILL_KMH:
             return 0.0, False
-
-        is_crit = False
-        if speed_kmh < 5.5:
-            base_dps = speed_kmh * 4.5
-        elif speed_kmh <= 8.5:
-            base_dps = speed_kmh * 6.5
-            if random.random() < 0.25:
-                base_dps *= 1.5
-                is_crit = True
+        if speed_kmh < WALK_MAX_KMH:
+            return round(speed_kmh * WALK_DPS_PER_KMH, 1), False
+        if speed_kmh <= JOG_MAX_KMH:
+            base, (chance, mult) = speed_kmh * JOG_DPS_PER_KMH, JOG_CRIT
         else:
-            base_dps = speed_kmh * 9.0
-            if random.random() < 0.45:
-                base_dps *= 2.0
-                is_crit = True
+            base, (chance, mult) = speed_kmh * SPRINT_DPS_PER_KMH, SPRINT_CRIT
+        crit = self.rng.random() < chance
+        return round(base * mult if crit else base, 1), crit
 
-        return round(base_dps, 1), is_crit
+    def base_dps(self, speed_kmh: float) -> float:
+        """DPS without a crit roll (for the HUD counter; never consumes randomness)."""
+        if speed_kmh < STILL_KMH:
+            return 0.0
+        k = (WALK_DPS_PER_KMH if speed_kmh < WALK_MAX_KMH else
+             JOG_DPS_PER_KMH if speed_kmh <= JOG_MAX_KMH else SPRINT_DPS_PER_KMH)
+        return round(speed_kmh * k, 1)
 
-    def trigger_milestone_surge(
-        self, milestone_m: int
-    ) -> list[AdventureEvent]:
-        """Unleashes a massive companion shockwave when passing a 1K/3K/5K distance tier."""
+    def trigger_milestone_surge(self, milestone_m: int) -> list[AdventureEvent]:
+        """Companion Shockwave: SURGE_BASE + SURGE_PER_KM x km, split over alive mobs."""
         events: list[AdventureEvent] = []
-        if not self.active_cluster or not self.active_cluster.has_alive:
+        cluster = self.active_cluster
+        if not cluster or not cluster.has_alive:
             return events
-
-        # Massive burst damage: 250 base + 50 per km
-        burst_dmg = 250.0 + ((milestone_m / 1000.0) * 50.0)
-        alive = self.active_cluster.alive_creatures
-
-        events.append(
-            AdventureEvent(
-                event_type=EventType.MILESTONE_SURGE,
-                message=f"Milestone {milestone_m // 1000}K reached! Companion unleashes Milestone Shockwave ({burst_dmg:.0f} AoE damage)!",
-                damage=burst_dmg,
-            )
-        )
-
-        # Distribute burst damage across all alive creatures in the cluster
-        damage_per_creature = burst_dmg / len(alive)
-        for creature in alive:
-            creature.take_damage(damage_per_creature)
-            if not creature.is_alive:
-                self._handle_creature_defeat(creature, events)
-
-        if not self.active_cluster.has_alive:
-            self.active_cluster.is_cleared = True
-            events.append(
-                AdventureEvent(
-                    event_type=EventType.CLUSTER_CLEARED,
-                    message=f"Cluster {self.active_cluster.cluster_id} cleared by Milestone Surge!",
-                )
-            )
-
+        km = milestone_m // 1000
+        burst = SURGE_BASE + (milestone_m / 1000.0) * SURGE_PER_KM
+        alive = cluster.alive_creatures
+        events.append(AdventureEvent(
+            EventType.MILESTONE_SURGE,
+            f"{km}K reached! Companion Shockwave: {burst:.0f} damage!",
+            damage=burst, details={"milestone_m": milestone_m}))
+        share = burst / len(alive)
+        for c in alive:
+            dealt = c.take_damage(share)
+            events.append(AdventureEvent(EventType.MULTI_HIT, f"Shockwave hit {c.name}",
+                                         target_id=c.id, target_name=c.name, damage=dealt,
+                                         details={"source": "surge"}))
+            if not c.is_alive:
+                self._handle_creature_defeat(c, events)
+        self._check_cleared(events, "by the Shockwave")
         return events
 
-    def update_tick(
-        self,
-        delta_seconds: float,
-        speed_kmh: float,
-        distance_increment_m: float,
-        has_multi_hit: bool = True,
-    ) -> list[AdventureEvent]:
-        """Main periodic update loop called by the GPS tracking tick."""
+    def update_tick(self, delta_seconds: float, speed_kmh: float, distance_increment_m: float,
+                    has_multi_hit: bool = True) -> list[AdventureEvent]:
+        """One GPS/timer tick. Negative or bogus inputs are clamped (emulators, GPS jumps)."""
         events: list[AdventureEvent] = []
-        self.total_distance_m += distance_increment_m
+        delta_seconds = max(0.0, delta_seconds or 0.0)
+        speed_kmh = max(0.0, speed_kmh or 0.0)
+        self.total_distance_m += max(0.0, distance_increment_m or 0.0)
 
-        # 1. Check Distance Milestones
         for m in self.MILESTONES_M:
             if m not in self.cleared_milestones and self.total_distance_m >= m:
                 self.cleared_milestones.add(m)
-                milestone_events = self.trigger_milestone_surge(m)
-                events.extend(milestone_events)
+                events.extend(self.trigger_milestone_surge(m))
 
-        # 2. Spawn Cluster if distance reached and no active cluster
-        if (
-            self.active_cluster is None or self.active_cluster.is_cleared
-        ) and self.total_distance_m >= self.next_spawn_distance_m:
-            self.active_cluster = self.generate_cluster(self.total_distance_m)
-            self.next_spawn_distance_m = (
-                self.total_distance_m + self.DEFAULT_SPAWN_INTERVAL_M
-            )
-            events.append(
-                AdventureEvent(
-                    event_type=EventType.SPAWN_CLUSTER,
-                    message=f"Encounter! Encountered a pack of {len(self.active_cluster.creatures)} creatures!",
-                    details={
-                        "creature_count": len(self.active_cluster.creatures),
-                        "cluster_id": self.active_cluster.cluster_id,
-                    },
-                )
-            )
+        cluster = self.active_cluster
+        if (cluster is None or cluster.is_cleared) and \
+                self.total_distance_m >= self.next_spawn_distance_m:
+            cluster = self.active_cluster = self.generate_cluster(self.total_distance_m)
+            self.manual_target_id = None
+            if self.target_mode == TargetMode.MANUAL:
+                self.target_mode = TargetMode.LOWEST_HP
+            self.next_spawn_distance_m = self.total_distance_m + SPAWN_INTERVAL_M
+            events.append(AdventureEvent(
+                EventType.SPAWN_CLUSTER,
+                ("A BOSS approaches!" if cluster.has_boss else "Encounter!")
+                + f" {len(cluster.creatures)} creatures ahead.",
+                details={"creature_count": len(cluster.creatures),
+                         "cluster_id": cluster.cluster_id, "has_boss": cluster.has_boss}))
 
-        # 3. Combat Execution
-        if (
-            self.active_cluster
-            and self.active_cluster.has_alive
-            and delta_seconds > 0
-        ):
-            dps, is_crit = self.calculate_dps(speed_kmh)
-            if dps > 0:
-                tick_damage = dps * delta_seconds
-
-                target = self.active_cluster.select_target(
-                    mode=self.target_mode,
-                    manual_id=self.manual_target_id,
-                )
-
-                if target:
-                    dealt = target.take_damage(tick_damage)
-                    events.append(
-                        AdventureEvent(
-                            event_type=EventType.DAMAGE_DEALT,
-                            target_id=target.id,
-                            target_name=target.name,
-                            damage=dealt,
-                            is_crit=is_crit,
-                            message=f"{'CRIT! ' if is_crit else ''}Hit {target.name} for {dealt:.1f} dmg ({target.current_hp:.1f}/{target.max_hp:.1f} HP)",
-                        )
-                    )
-
-                    # Multi-Hit Cleave (hits up to 2 other alive targets for 45% splash)
-                    alive_others = [
-                        c
-                        for c in self.active_cluster.alive_creatures
-                        if c.id != target.id
-                    ]
-                    if has_multi_hit and alive_others:
-                        splash_dmg = tick_damage * 0.45
-                        for splash_target in alive_others[:2]:
-                            s_dealt = splash_target.take_damage(splash_dmg)
-                            events.append(
-                                AdventureEvent(
-                                    event_type=EventType.MULTI_HIT,
-                                    target_id=splash_target.id,
-                                    target_name=splash_target.name,
-                                    damage=s_dealt,
-                                    message=f"Multi-Hit cleaved {splash_target.name} for {s_dealt:.1f} dmg",
-                                )
-                            )
-                            if not splash_target.is_alive:
-                                self._handle_creature_defeat(
-                                    splash_target, events
-                                )
-
-                    # Check Primary Target Defeat
-                    if not target.is_alive:
-                        self._handle_creature_defeat(target, events)
-
-                    # Check if entire cluster cleared
-                    if not self.active_cluster.has_alive:
-                        self.active_cluster.is_cleared = True
-                        events.append(
-                            AdventureEvent(
-                                event_type=EventType.CLUSTER_CLEARED,
-                                message=f"Cluster {self.active_cluster.cluster_id} cleared!",
-                            )
-                        )
-
+        if not cluster or not cluster.has_alive or delta_seconds <= 0:
+            return events
+        dps, crit = self.calculate_dps(speed_kmh)
+        if dps <= 0:
+            return events
+        tick = dps * delta_seconds
+        target = cluster.select_target(self.target_mode, self.manual_target_id)
+        if target is None:
+            return events
+        dealt = target.take_damage(tick)
+        events.append(AdventureEvent(
+            EventType.DAMAGE_DEALT,
+            f"{'CRIT! ' if crit else ''}Hit {target.name} for {dealt:.0f}",
+            target_id=target.id, target_name=target.name, damage=dealt, is_crit=crit))
+        if has_multi_hit:
+            for other in [c for c in cluster.alive_creatures if c.id != target.id][
+                    :CLEAVE_TARGETS]:
+                s = other.take_damage(tick * CLEAVE_RATIO)
+                events.append(AdventureEvent(
+                    EventType.MULTI_HIT, f"Cleave hit {other.name} for {s:.0f}",
+                    target_id=other.id, target_name=other.name, damage=s, is_crit=crit,
+                    details={"source": "cleave"}))
+                if not other.is_alive:
+                    self._handle_creature_defeat(other, events)
+        if not target.is_alive:
+            self._handle_creature_defeat(target, events)
+        self._check_cleared(events)
         return events
 
-    def _handle_creature_defeat(
-        self, creature: Creature, events: list[AdventureEvent]
-    ) -> None:
-        """Handles rewards, stat tracking, and defeat event emission."""
+    # ------------------------------------------------------------------ helpers
+    def _check_cleared(self, events: list[AdventureEvent], how: str = "") -> None:
+        c = self.active_cluster
+        if c and not c.is_cleared and not c.has_alive:
+            c.is_cleared = True
+            events.append(AdventureEvent(EventType.CLUSTER_CLEARED,
+                                         f"Pack cleared{' ' + how if how else ''}!",
+                                         details={"cluster_id": c.cluster_id}))
+
+    def _handle_creature_defeat(self, creature: Creature, events: list[AdventureEvent]) -> None:
         self.creatures_defeated_count += 1
         self.total_xp_earned += creature.xp_reward
         self.total_coins_earned += creature.coin_reward
-
-        frag_gained = False
-        if random.random() < creature.cosmetic_fragment_chance:
+        frag = self.rng.random() < creature.cosmetic_fragment_chance
+        if frag:
             self.cosmetic_fragments_count += 1
-            frag_gained = True
-
-        events.append(
-            AdventureEvent(
-                event_type=EventType.CREATURE_DEFEATED,
-                target_id=creature.id,
-                target_name=creature.name,
-                xp_gained=creature.xp_reward,
-                coins_gained=creature.coin_reward,
-                details={"fragment_gained": frag_gained},
-                message=f"Defeated {creature.name}! +{creature.xp_reward} XP, +${creature.coin_reward} Coins{' (+1 Cosmetic Frag!)' if frag_gained else ''}",
-            )
-        )
+        events.append(AdventureEvent(
+            EventType.CREATURE_DEFEATED,
+            f"Defeated {creature.name}! +{creature.xp_reward} XP, +{creature.coin_reward} coins"
+            + (" (+1 fragment)" if frag else ""),
+            target_id=creature.id, target_name=creature.name, xp_gained=creature.xp_reward,
+            coins_gained=creature.coin_reward,
+            details={"fragment_gained": frag, "tier": creature.tier.value}))

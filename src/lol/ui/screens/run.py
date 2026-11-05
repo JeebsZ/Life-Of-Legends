@@ -52,12 +52,23 @@ CUE_LABELS = {"1km": "Every 1 km", "0.5km": "Every 0.5 km", "5min": "Every 5 min
 ROUTE_COLOR = "#FF8A5B"
 LIVE_MAP_POINTS = 400  # the live polyline is thinned to this many points
 TICK_S = 1.0
+ADV_MAX_TICK_S = 3.0  # adventure: longest gap one tick may count (app backgrounded, lag)
 WAKE_TIMEOUT_S = 1.5  # keep-awake enable/disable; web never answers
 MAP_EVERY_S = 2.0  # wall seconds between polyline redraws (keeps the web client snappy)
 FOLLOW_EVERY_S = 3.0
 GOOD_ACC, OK_ACC = 10.0, rcore.MAX_ACCURACY_M
 HONEST_NOTE = ("Tracking works only while Life of Legends is open on screen. Background and "
                "locked-screen tracking aren't supported yet.")
+# Adventure card sound names -> (sfx name, volume scale). Swap in real files later by adding
+# them to sfx.py and pointing these entries at them.
+ADVENTURE_SOUNDS: dict[str, tuple[str, float | None]] = {
+    "hit.ogg": ("scan_tick", 0.35),
+    "crit_hit.ogg": ("xp_fill", 0.7),
+    "slime_defeat.ogg": ("quest_clear", 0.8),
+    "cluster_spawn.ogg": ("objective_new", 0.7),
+    "boss_spawn.ogg": ("alert_soft", None),
+    "milestone_surge.ogg": ("milestone", None),
+}
 
 
 def km(meters: float) -> str:
@@ -138,20 +149,16 @@ class RunScreen:
         self.live_marks: Any = None
         self.adventure_engine = AdventureEngine()
         self.adventure_card: AdventureRunCard | None = None
-        self._last_adv_dist = 0.0
-        self._last_adv_time = 0.0
         self._build_live()
 
     def _play_adventure_sound(self, sound_name: str) -> None:
-        sound_map = {
-            "slime_defeat.ogg": "quest_clear",
-            "milestone_surge.ogg": "milestone",
-            "cluster_spawn.ogg": "objective_new",
-            "crit_hit.ogg": "power_up",
-        }
-        stem = sound_map.get(sound_name, sound_name.removesuffix(".ogg").removesuffix(".wav"))
+        """Adventure card sound hook -> existing sfx (unknown names are ignored, so missing
+        .ogg files never break a run). Frequent sounds stay light and quiet; only the big
+        moments use FOREGROUND sounds that hold Luma's voice."""
+        stem, volume = ADVENTURE_SOUNDS.get(
+            sound_name, (sound_name.removesuffix(".ogg").removesuffix(".wav"), None))
         if stem in sfx.NAMES:
-            sfx.play(stem)
+            sfx.play(stem, volume=volume)
 
     # ------------------------------------------------------------------ lifecycle
     def restyle(self) -> None:
@@ -811,8 +818,6 @@ class RunScreen:
         goal_m = TIER_BY_ID[self.goal].meters if self.goal else None
         self.coach = CueCoach(s.mode, s.cue_every, goal_m, uncleared)
         self.adventure_engine = AdventureEngine()
-        self._last_adv_dist = 0.0
-        self._last_adv_time = now
         self.started = datetime.now().strftime("%H:%M")
         self.phase = "live"
         self.gen += 1
@@ -833,8 +838,7 @@ class RunScreen:
         await ui.buzz("medium")
 
     async def _tick(self, gen: int) -> None:
-        last_adv_dist = 0.0
-        last_adv_time = self.gps.now()
+        adv = {"dist": 0.0, "t": self.gps.now()}
         while self.gen == gen and self.phase == "live":
             await asyncio.sleep(TICK_S)
             if self.gen != gen or self.phase != "live" or self.tracker is None:
@@ -846,44 +850,32 @@ class RunScreen:
             if wall - self._last_map >= MAP_EVERY_S and n != self._map_points:
                 self._last_map, self._map_points = wall, n
                 self._update_map(now)  # the polyline is the heavy part: every 2 s at most
-
-            # --- Adventure tick hook with emulator & stationary safety ---
-            with contextlib.suppress(Exception):
-                delta_s = max(0.0, now - last_adv_time)
-                last_adv_time = now
-
-                dist_inc = max(0.0, self.tracker.distance_m - last_adv_dist)
-                last_adv_dist = self.tracker.distance_m
-
-                is_still = (
-                    self.tracker.paused
-                    or self.tracker.auto_paused(now)
-                    or self.perm != gps.GRANTED
-                    or not self.tracker.points
-                )
-                if is_still:
-                    speed_kmh = 0.0
-                else:
-                    pace = self.tracker.current_pace(now)
-                    if pace and pace > 0:
-                        speed_kmh = 3600.0 / pace
-                    elif delta_s > 0 and dist_inc > 0:
-                        speed_kmh = (dist_inc / delta_s) * 3.6
-                    else:
-                        speed_kmh = 0.0
-
-                if hasattr(self, "adventure_engine") and self.adventure_engine is not None:
-                    adv_events = self.adventure_engine.update_tick(
-                        delta_seconds=delta_s,
-                        speed_kmh=speed_kmh,
-                        distance_increment_m=dist_inc,
-                    )
-                    if hasattr(self, "adventure_card") and self.adventure_card is not None:
-                        self.adventure_card.process_tick_events(adv_events)
-                        self.adventure_card.refresh_display(current_speed_kmh=speed_kmh)
-
+            with contextlib.suppress(Exception):  # the adventure must never break a run
+                self._adventure_tick(now, adv)
             ui.refresh(self.live_view)
             self._cues(now)
+
+    def _adventure_tick(self, now: float, adv: dict[str, float]) -> None:
+        """Feed the Adventure engine from the tracker. No GPS permission, no fix yet
+        (emulator / Bluestacks / PC), paused or auto-paused -> 0 km/h: the pack waits and
+        nothing crashes. A long gap (app was backgrounded) is capped so it can't one-shot."""
+        tr, card = self.tracker, self.adventure_card
+        if tr is None:
+            return
+        delta_s = min(ADV_MAX_TICK_S, max(0.0, now - adv["t"]))
+        dist_inc = max(0.0, tr.distance_m - adv["dist"])
+        adv["t"], adv["dist"] = now, tr.distance_m
+        speed_kmh = 0.0
+        if not (tr.paused or tr.auto_paused(now) or self.perm != gps.GRANTED or not tr.points):
+            pace = tr.current_pace(now)
+            if pace and pace > 0:
+                speed_kmh = 3600.0 / pace
+            elif delta_s > 0 and dist_inc > 0:
+                speed_kmh = dist_inc / delta_s * 3.6
+        events = self.adventure_engine.update_tick(delta_s, speed_kmh, dist_inc)
+        if card is not None:
+            card.process_tick_events(events)
+            card.refresh_display(current_speed_kmh=speed_kmh)
 
     def _cues(self, now: float) -> None:
         tr, coach = self.tracker, self.coach
