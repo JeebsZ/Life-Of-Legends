@@ -1,5 +1,5 @@
 [project]
-name = "lifeoflegends"
+name = "LUMA"
 version = "0.1.0"
 description = "LUMA: Your Lifestyle QoL - gamify your life. Mobile-first, runs on PC too."
 requires-python = ">=3.12"
@@ -16,9 +16,10 @@ dependencies = [
 dev = ["pytest>=9", "ruff>=0.17"]
 
 [tool.flet]
-org = "com.jarvin"
+org = "com.companions"
 product = "LUMA: Your Lifestyle QoL"
-company = "Jarvin"
+company = "Companions"
+bundle_id = "com.companions.LUMA"
 
 [tool.flet.app]
 path = "src"

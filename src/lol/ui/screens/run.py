@@ -44,7 +44,7 @@ log = logging.getLogger(__name__)
 OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 OSM_ATTRIBUTION = "OpenStreetMap contributors"  # the attribution layer adds the ©
 # identifies the app to the tile server (OSM policy: a clear app name, not a library default)
-TILE_UA = "LifeOfLegends/0.1 (com.jarvin.lifeoflegends)"
+TILE_UA = "LUMA/0.1 (com.companions.LUMA)"
 MANILA = (14.5826, 120.9787)
 STAGES = ("TRACING ROUTE…", "MEASURING EFFORT…", "RUN LOGGED")
 MODE_INFO = {"run": ("Run", ft.Icons.DIRECTIONS_RUN), "walk": ("Walk", ft.Icons.DIRECTIONS_WALK)}

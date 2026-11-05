@@ -18,7 +18,7 @@ Do these steps yourself. They involve your identity, payment profile and legal a
 8. **Lifetime:** create an **in-app product** (one-time) `legends_lifetime` at ₱1,990, plus one-time products for paid cosmetics, themes and voice packs.
 
 ## 2. RevenueCat (handles purchases, trials and restore; free until US$2.5k a month in revenue)
-1. Go to app.revenuecat.com and create a project, then add an Android app (package `com.jarvin.lifeoflegends`).
+1. Go to app.revenuecat.com and create a project, then add an Android app (package `com.companions.LUMA`).
 2. Link Google Play: create a Google Cloud **service account** and give it Play Console access. Follow RevenueCat's "Google Play service credentials" guide; it walks you through every click.
 3. Create an **Entitlement** `premium`. Attach `legends_plus` monthly and yearly, plus `legends_lifetime`.
 4. Create an **Offering** `default`, plus `season` for the ₱59 deal.
