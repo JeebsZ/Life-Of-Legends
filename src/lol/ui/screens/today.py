@@ -124,21 +124,29 @@ class TodayScreen:
         sub = f"{sq.skill_name} · step {index + 1} of {len(sq.steps)}"
         if sq.target_date:
             sub += f" · by {common.short_date(date.fromisoformat(sq.target_date))}"
+        step_tip = f"{step.title}\n{step.note}" if step.note else step.title
+        col_items: list[ft.Control] = [
+            ft.Text(step.title, size=Type.BODY, weight=ft.FontWeight.W_600,
+                    color=C.TEXT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS,
+                    tooltip=step_tip),
+        ]
+        if step.note:
+            col_items.append(ft.Text(step.note, size=Type.CAPTION, color=C.TEXT_DIM,
+                                     max_lines=2, overflow=ft.TextOverflow.ELLIPSIS,
+                                     tooltip=step.note))
+        col_items.append(ft.Text(sub, size=Type.CAPTION, color=C.TEXT_DIM, max_lines=1,
+                                 overflow=ft.TextOverflow.ELLIPSIS))
         row = ft.Container(
             ft.Row([
                 ui.path_avatar(th.path_icon(sq.path_id), pc, 36),
-                ft.Column([
-                    ft.Text(step.title, size=Type.BODY, weight=ft.FontWeight.W_600,
-                            color=C.TEXT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
-                    ft.Text(sub, size=Type.CAPTION, color=C.TEXT_DIM, max_lines=1,
-                            overflow=ft.TextOverflow.ELLIPSIS),
-                ], spacing=1, expand=True, tight=True),
+                ft.Column(col_items, spacing=1, expand=True, tight=True),
                 ui.xp_chip(step.xp), check,
             ], spacing=Space.MD - 2, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             bgcolor=C.SURFACE_HI, border_radius=Radius.MD, border=ft.Border.all(1, C.a(pc, 0.3)),
             padding=ft.Padding.symmetric(horizontal=Space.MD, vertical=Space.SM + 2),
             scale=1, animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK),
             animate_opacity=Motion.anim(Motion.DONE_FADE_MS), opacity=1,
+            tooltip=step_tip,
         )
 
         async def tap(_: Any) -> None:

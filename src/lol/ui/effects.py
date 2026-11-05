@@ -2413,7 +2413,8 @@ class SkillNode(ft.Container):
 
     def __init__(self, node_id: str, label: str, state: str = "locked", *,
                  path_color: str | None = None, on_tap: Callable[[str], Any] | None = None,
-                 width: float = 104, height: float = 82, reduce: bool | None = None) -> None:
+                 width: float = 104, height: float = 82, reduce: bool | None = None,
+                 tooltip: str | None = None) -> None:
         self.node_id = node_id
         self.state = state
         self._on_tap_cb = on_tap
@@ -2422,6 +2423,7 @@ class SkillNode(ft.Container):
         self._accent = self.accent_for(state, path_color)
         locked = state == "locked"
         acc = self._accent
+        tip = tooltip or label
         tag = ft.Container(
             ft.Text(_TAGS.get(state, state.upper()), size=7.5, weight=ft.FontWeight.BOLD,
                     color=acc, style=ft.TextStyle(letter_spacing=1.6)),
@@ -2430,7 +2432,7 @@ class SkillNode(ft.Container):
         name = ft.Text(label, size=12, weight=ft.FontWeight.W_700, max_lines=2,
                        overflow=ft.TextOverflow.ELLIPSIS, text_align=ft.TextAlign.CENTER,
                        color=a("#E4F0FF", 0.45) if locked else "#E4F0FF",
-                       style=ft.TextStyle(height=1.1))
+                       style=ft.TextStyle(height=1.1), tooltip=tip)
         seed = sum(map(ord, node_id))
         caption = cv.Canvas([cv.Path(glyphs.word_elements(2, 4, 6, 5.5, seed=seed),
                                      paint=_stroke(a(acc, 0.55), 0.8))], width=50, height=8)
@@ -2452,7 +2454,7 @@ class SkillNode(ft.Container):
             shadow=None if locked else ft.BoxShadow(blur_radius=12, color=a(acc, 0.18)))
         super().__init__(content=ft.Stack([self._halo, frame], width=width, height=height),
                          width=width, height=height, on_click=self._tap,
-                         scale=1, animate_scale=_anim(140, BACK))
+                         scale=1, animate_scale=_anim(140, BACK), tooltip=tip)
         if state == "next":
             self._halo.opacity = 0.9
 
@@ -2589,7 +2591,8 @@ class SkillLinkTree(ft.Container):
             x, y = xy(nid)
             node = SkillNode(nid, n.get("label", nid), n.get("state", "locked"),
                              path_color=n.get("path_color"), on_tap=self._on_tap,
-                             width=nw, height=nh, reduce=self._reduce)
+                             width=nw, height=nh, reduce=self._reduce,
+                             tooltip=n.get("tooltip"))
             node.left, node.top = x, y
             children.append(node)
         return ft.Stack(children, width=w, height=h)

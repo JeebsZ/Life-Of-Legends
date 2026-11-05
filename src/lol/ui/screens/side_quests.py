@@ -197,8 +197,14 @@ class SideQuestsSection:
             ft.Container(ft.Text(str(i + 1), size=Type.CAPTION, weight=ft.FontWeight.BOLD,
                                  color=pc), width=22, height=22, border_radius=11,
                          bgcolor=C.a(pc, 0.16), alignment=ft.Alignment.CENTER),
-            ft.Text(s.title, size=Type.LABEL, color=C.TEXT, expand=True),
-        ], spacing=Space.SM) for i, s in enumerate(c.steps)]
+            ft.Column([
+                ft.Text(s.title, size=Type.LABEL, color=C.TEXT,
+                        tooltip=f"{s.title}\n{s.note}" if s.note else s.title),
+                *([ft.Text(s.note, size=Type.CAPTION, color=C.TEXT_DIM, max_lines=2,
+                           overflow=ft.TextOverflow.ELLIPSIS, tooltip=s.note)] if s.note else []),
+            ], spacing=1, expand=True, tight=True),
+        ], spacing=Space.SM, tooltip=f"{s.title}\n{s.note}" if s.note else s.title)
+            for i, s in enumerate(c.steps)]
         if running:
             label, icon = "In progress", ft.Icons.HOURGLASS_TOP
         elif known:

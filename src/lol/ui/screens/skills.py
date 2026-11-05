@@ -58,7 +58,8 @@ def chain_nodes(app: App, sq: Any) -> list[dict]:
         else:
             state = "locked"
         nodes.append({"id": f"step:{sq.id}:{i}", "label": st.title, "state": state,
-                      "path_color": pc, "parent": f"sq:{sq.id}"})
+                      "path_color": pc, "parent": f"sq:{sq.id}",
+                      "tooltip": f"{st.title}\n{st.note}" if st.note else st.title})
     return nodes
 
 
@@ -166,7 +167,7 @@ class SkillsScreen:
         return ft.Row([
             ft.Column([
                 ft.Text(sk.name, size=Type.BODY, weight=ft.FontWeight.W_600, color=C.TEXT,
-                        max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
+                        max_lines=2, overflow=ft.TextOverflow.ELLIPSIS, tooltip=sk.name),
                 ft.Row([ui.chip(sk.rank_name, icon=ft.Icons.MILITARY_TECH, color=pc), stars],
                        spacing=Space.SM, tight=True,
                        vertical_alignment=ft.CrossAxisAlignment.CENTER),

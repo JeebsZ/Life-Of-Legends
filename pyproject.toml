@@ -1,7 +1,7 @@
 [project]
 name = "lifeoflegends"
 version = "0.1.0"
-description = "Life of Legends - gamify your life. Mobile-first, runs on PC too."
+description = "LUMA: Your Lifestyle QoL - gamify your life. Mobile-first, runs on PC too."
 requires-python = ">=3.12"
 dependencies = [
     "flet>=1.0,<2",
@@ -17,7 +17,7 @@ dev = ["pytest>=9", "ruff>=0.17"]
 
 [tool.flet]
 org = "com.jarvin"
-product = "Life of Legends"
+product = "LUMA: Your Lifestyle QoL"
 company = "Jarvin"
 
 [tool.flet.app]
@@ -71,9 +71,12 @@ flet-lumen-ocr = "extensions/flet_lumen_ocr"
 "android.permission.VIBRATE" = true
 # CAMERA: meal photo scan (flet-camera); denied -> the app falls back to the gallery.
 "android.permission.CAMERA" = true
-# Location: walk/run tracker, only while the app is open (no background location).
+# Location: walk/run tracker (foreground & background / screen-off tracking).
 "android.permission.ACCESS_FINE_LOCATION" = true
 "android.permission.ACCESS_COARSE_LOCATION" = true
+"android.permission.ACCESS_BACKGROUND_LOCATION" = true
+"android.permission.FOREGROUND_SERVICE" = true
+"android.permission.FOREGROUND_SERVICE_LOCATION" = true
 "android.permission.WAKE_LOCK" = true
 
 [tool.pytest.ini_options]

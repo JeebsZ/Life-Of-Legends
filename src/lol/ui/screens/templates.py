@@ -91,20 +91,25 @@ class TemplatesScreen:
             menu.append(("Delete", ft.Icons.DELETE_OUTLINE,
                          lambda tid=t.id: self._delete(tid), True))
         edited = t.builtin and any(x.id == t.id for x in self.app.game.data.templates)
+        full_tip = f"{t.title}\n{t.note}" if t.note else t.title
+        col_items: list[ft.Control] = [
+            ft.Text(t.title + (" · edited" if edited else ""), size=Type.BODY,
+                    weight=ft.FontWeight.W_600, color=C.TEXT, max_lines=2,
+                    overflow=ft.TextOverflow.ELLIPSIS, tooltip=full_tip),
+        ]
+        if t.note:
+            col_items.append(ft.Text(t.note, size=Type.CAPTION, color=C.TEXT_DIM, max_lines=2,
+                                     overflow=ft.TextOverflow.ELLIPSIS, tooltip=t.note))
+        col_items.append(ft.Row(meta, spacing=Space.XS, wrap=True, run_spacing=2,
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER))
         return ft.Container(ft.Row([
             ui.path_avatar(th.path_icon(t.path_id), pc, 38),
-            ft.Column([
-                ft.Text(t.title + (" · edited" if edited else ""), size=Type.BODY,
-                        weight=ft.FontWeight.W_600, color=C.TEXT, max_lines=2,
-                        overflow=ft.TextOverflow.ELLIPSIS),
-                ft.Row(meta, spacing=Space.XS, wrap=True, run_spacing=2,
-                       vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            ], spacing=Space.XS, expand=True, tight=True),
+            ft.Column(col_items, spacing=Space.XS, expand=True, tight=True),
             use, common.menu_button(menu, tooltip="Template options"),
         ], spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             bgcolor=C.SURFACE_HI, border_radius=Radius.MD,
             padding=ft.Padding.only(left=Space.MD, right=0, top=Space.SM, bottom=Space.SM),
-            on_long_press=lambda e, tid=t.id: self._edit(tid))
+            on_long_press=lambda e, tid=t.id: self._edit(tid), tooltip=full_tip)
 
     def _hidden_row(self, t: QuestTemplate) -> ft.Control:
         def restore(_: Any = None) -> None:

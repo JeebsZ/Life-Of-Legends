@@ -19,7 +19,7 @@ from lol.ui.theme import C, Motion, Size, Space, Type
 if TYPE_CHECKING:
     from lol.ui.app import App
 
-CREDITS = "Luma voice: Piper TTS, alba voice (University of Edinburgh, CC BY 4.0)"
+CREDITS = "Luma voice dataset: Alba (University of Edinburgh, CC BY 4.0)"
 DATA_CREDIT = ("Food data: USDA FoodData Central (U.S. Department of Agriculture, Agricultural "
                "Research Service), public domain CC0. Restaurant items: chain sites or "
                "labelled estimates.")

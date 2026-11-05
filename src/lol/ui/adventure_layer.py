@@ -137,7 +137,7 @@ class _Badge:
 
     @staticmethod
     def _hp_label(c: Creature) -> str:
-        return f"{int(round(c.current_hp))}/{int(round(c.max_hp))}"
+        return f"{round(c.current_hp)}/{round(c.max_hp)}"
 
     def _border(self, color: str | None = None) -> ft.Border:
         if color:

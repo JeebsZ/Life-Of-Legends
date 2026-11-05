@@ -293,3 +293,47 @@ def test_basic_run_is_stored_and_round_trips():
     assert g.run(c.ref_id).basic
     back = storage.from_dict(storage.to_dict(g.data))
     assert back.runs[0].basic and back.runs[0].steps > 0
+
+
+def test_i18n_translations_and_non_ai_credits():
+    from lol.core import i18n
+
+    for lang in ("en", "tl", "zh", "ja", "ar", "hi", "es", "id", "ko", "pt", "fr", "de"):
+        assert lang in i18n.LANGUAGES
+    assert i18n.tr("Today", "zh") == "今日"
+    assert i18n.tr("Today", "ja") == "今日"
+    assert i18n.tr("Today", "tl") == "Ngayon"
+    assert i18n.tr("Today", "ar") == "اليوم"
+    assert i18n.tr("Today", "hi") == "आज"
+    g = Game()
+    g.set_profile(language="ja")
+    back = storage.from_dict(storage.to_dict(g.data))
+    assert back.profile.language == "ja"
+    all_credits = " ".join(
+        f"{title} {name} {detail}"
+        for title, items in i18n.CREDITS_SECTIONS
+        for name, detail in items
+    ).lower()
+    assert "openstax" in all_credits
+    assert "gutenberg" in all_credits
+    assert "usda" in all_credits
+    assert "piper" not in all_credits
+    assert "tflite" not in all_credits
+    assert "ml kit" not in all_credits
+
+
+def test_quest_and_step_tooltips_preserve_full_descriptions():
+    from lol.ui import components as ui
+
+    long_note = "Read chapters 1 to 3 carefully and write a two-sentence summary in your notebook."
+    qc = ui.QuestCard("Evening Study", note=long_note)
+    assert qc.tooltip == f"Evening Study\n{long_note}"
+    assert qc._note.tooltip == long_note
+    assert qc._note.max_lines == 2
+
+    sq = ui.SideQuestCard(
+        "Deep Reading",
+        path_id="scholar",
+        steps=[("Step 1", long_note, 25, 5, False)],
+    )
+    assert sq._rows[0].tooltip == f"Step 1\n{long_note}"

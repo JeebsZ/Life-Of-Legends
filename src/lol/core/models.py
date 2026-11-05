@@ -574,6 +574,9 @@ class Profile:
     nutrition: NutritionSettings = field(default_factory=NutritionSettings)
     onboarding: OnboardingAnswers = field(default_factory=OnboardingAnswers)
     center_pin: str | None = None  # More feature pinned to the nav's center slot (core/pins.py)
+    language: str = "en"  # active UI language code (core/i18n.py)
+    adventure_coins_today: int = 0  # creature trinket coins earned on `adventure_coins_day`
+    adventure_coins_day: str = ""  # ISO date for separate adventure coin cap
 
 
 # Notification sounds the user can pick (Settings): Sci-Fi pack notify_01..08.

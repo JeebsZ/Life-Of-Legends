@@ -20,7 +20,7 @@ from datetime import date, datetime
 
 import flet as ft
 
-from lol.core import pins, premium, welcome
+from lol.core import i18n, pins, premium, welcome
 from lol.core.game import COINS_BY_DIFFICULTY, Game
 from lol.core.models import RANK_NAMES, Completion
 from lol.core.progression import bar_steps, xp_for_level
@@ -125,6 +125,7 @@ class App:
         self.tab = TAB_TODAY
         self.prev_tab = TAB_TODAY  # where the center slot's back arrow returns to
         p = self.game.profile
+        i18n.set_language(p.language)
 
         # --- overlays: banner, Luma notice, Arcane effects (v1.2; calls queue) ---
         self.banner = ui.LevelUpBanner()
@@ -288,9 +289,13 @@ class App:
     def apply_settings(self) -> None:
         """Profile settings read outside the profile (Reduce effects is a module switch)."""
         reduce = self.game.profile.reduce_effects
+        i18n.set_language(self.game.profile.language)
         fx.set_reduce(reduce)
         self.space.set_reduce(None)
         ambient.set_glass_cap("frost" if reduce else "blur", self.page)
+        if hasattr(self, "nav"):
+            self.nav.refresh_labels()
+            self.refresh_center()
 
     def overdue_bills(self) -> int:
         return sum(1 for _, s, _ in self.game.bills_status(self.today()) if s == "overdue")
@@ -624,11 +629,12 @@ class App:
 
 
 def main(page: ft.Page) -> None:
-    page.title = "Life of Legends"
+    page.title = "LUMA: Your Lifestyle QoL"
     page.padding = 0
     page.spacing = 0
     with contextlib.suppress(Exception):  # web/mobile have no window to size
         page.window.width, page.window.height = 400, 860
+        page.window.icon = "icons/LumaAppIcon.jpg"
     ui.use_haptics(ft.HapticFeedback())
 
     app = App(page)

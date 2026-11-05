@@ -122,7 +122,7 @@ class BillsScreen:
         else:
             label = common.due_label(status, due, today)
         return ui.BillRow(bill.name, bill.amount, status=status, due_label=label,
-                          repeat_label=common.REPEAT_LABELS.get(bill.repeat),
+                          repeat_label=common.REPEAT_LABELS.get(bill.repeat), note=bill.note,
                           on_pay=lambda row, bid=bill.id: self._pay(bid),
                           on_click=lambda e, bid=bill.id: editors.edit_bill(
                               self.app, bid, self._refresh),

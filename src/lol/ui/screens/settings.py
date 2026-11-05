@@ -11,13 +11,14 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import flet as ft
 
+from lol.core import i18n
 from lol.core.models import NOTIFY_SOUNDS
 from lol.ui import components as ui
 from lol.ui import notify, sfx
 from lol.ui.screens import common
 from lol.ui.screens.premium import settings_blocks as premium_settings
 from lol.ui.screens.profile import theme_picker, voice_controls
-from lol.ui.theme import C, Motion, Space, Type
+from lol.ui.theme import C, Motion, Radius, Space, Type
 
 if TYPE_CHECKING:
     from lol.ui.app import App
@@ -58,6 +59,10 @@ class SettingsScreen:
                 common.secondary_button("Redo personalize", self._redo,
                                         icon=ft.Icons.AUTO_AWESOME),
             ], spacing=Space.SM, tight=True), padding=Space.MD),
+            ui.SectionHeader("Language"),
+            self._language_picker(),
+            ui.SectionHeader("Credits"),
+            self._credits_section(),
             *premium_settings(self.app, self.restyle),  # usage left, version, Developer
         ]
 
@@ -174,7 +179,7 @@ class SettingsScreen:
                 bgcolor=C.a(C.ACCENT, 0.1), border_radius=8, padding=Space.SM))
         elif self.permission is False and r.enabled:
             rows.append(ft.Container(ft.Column([
-                ft.Text("Notifications are blocked for Life of Legends on this phone.",
+                ft.Text("Notifications are blocked for LUMA: Your Lifestyle QoL on this phone.",
                         size=Type.CAPTION, color=C.TEXT),
                 common.secondary_button("Open phone settings", self._open_settings,
                                         icon=ft.Icons.SETTINGS),
@@ -251,7 +256,7 @@ class SettingsScreen:
             ok = await common.confirm(
                 app.page, "Turn on reminders?",
                 "Luma can remind you about bills, today's quests, water and your focus "
-                "timer. Android will ask once if Life of Legends may send notifications.",
+                "timer. Android will ask once if LUMA: Your Lifestyle QoL may send notifications.",
                 "Continue")
             if not ok:
                 self.restyle()  # put the switch back
@@ -299,6 +304,73 @@ class SettingsScreen:
     def restyle(self) -> None:
         self.render()
         ui.refresh(self.list)
+
+    # ------------------------------------------------------------------ language & credits
+    def _language_picker(self) -> ft.Control:
+        g, app = self.app.game, self.app
+        cur = g.profile.language
+
+        def pick(code: str) -> None:
+            if code == g.profile.language:
+                return
+            g.set_profile(language=code)
+            app.save()
+            app.apply_settings()
+            sfx.play("toggle")
+            app.toast(f"{i18n.tr('Language')}: {i18n.LANGUAGES[code]}", ft.Icons.LANGUAGE)
+            self.restyle()
+
+        chips: list[ft.Control] = []
+        for code, label in i18n.LANGUAGES.items():
+            on = code == cur
+            chips.append(ft.Container(
+                ft.Text(label, size=Type.CAPTION, weight=ft.FontWeight.W_700 if on else None,
+                        color=C.PRIMARY if on else C.TEXT),
+                bgcolor=C.a(C.PRIMARY, 0.2) if on else C.a(C.TEXT, 0.06),
+                border=ft.Border.all(1.5 if on else 1, C.PRIMARY if on else C.OUTLINE),
+                border_radius=Radius.PILL,
+                padding=ft.Padding.symmetric(horizontal=Space.MD, vertical=Space.XS + 2),
+                ink=True, data=code, on_click=lambda e, c=code: pick(c),
+            ))
+        return common.card(ft.Column([
+            common.hint("Choose your display language for tabs, Paths and headers."),
+            ft.Row(chips, wrap=True, spacing=Space.XS, run_spacing=Space.XS),
+        ], spacing=Space.SM, tight=True), padding=Space.MD)
+
+    def _credits_section(self) -> ft.Control:
+        def open_credits(_: Any = None) -> None:
+            sfx.play("tap")
+            body: list[ft.Control] = [
+                common.hint("LUMA: Your Lifestyle QoL thanks the human authors, educators, "
+                            "public agencies and open-source communities below. "
+                            "All AI-generated content is excluded from these credits."),
+            ]
+            for sec_title, entries in i18n.CREDITS_SECTIONS:
+                body.append(ui.SectionHeader(sec_title))
+                for name, detail in entries:
+                    body.append(ft.Container(
+                        ft.Column([
+                            ft.Text(name, size=Type.BODY, weight=ft.FontWeight.W_700,
+                                    color=C.TEXT, tooltip=f"{name}\n{detail}"),
+                            ft.Text(detail, size=Type.CAPTION, color=C.TEXT_DIM,
+                                    tooltip=detail),
+                        ], spacing=2, tight=True),
+                        bgcolor=C.SURFACE_HI, border_radius=Radius.MD, padding=Space.SM + 2,
+                    ))
+            common.open_sheet(self.app.page, i18n.tr("Credits"), body)
+
+        preview = ", ".join(name for _, items in i18n.CREDITS_SECTIONS for name, _ in items[:1])
+        return common.card(ft.Column([
+            ft.Row([
+                ft.Icon(ft.Icons. MENU_BOOK, color=C.PRIMARY, size=20),
+                ft.Text("Open textbooks, datasets & libraries", size=Type.BODY,
+                        weight=ft.FontWeight.W_600, color=C.TEXT, expand=True),
+            ], spacing=Space.SM),
+            common.hint(f"Includes {preview}, and more human/open-license sources "
+                        "(AI-generated content excluded)."),
+            ft.Row([common.secondary_button(i18n.tr("View Credits"), open_credits,
+                                            icon=ft.Icons. VERIFIED_OUTLINED)]),
+        ], spacing=Space.SM, tight=True), padding=Space.MD)
 
     def _set_reduce(self, on: bool) -> None:
         self.app.game.set_profile(reduce_effects=on)

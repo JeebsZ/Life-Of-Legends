@@ -171,6 +171,10 @@ def _profile(raw: dict[str, Any], schema: int = SCHEMA) -> Profile:
     profile.onboarding.paths = [str(x) for x in profile.onboarding.paths or []]
     pin = raw.get("center_pin")  # additive: missing / junk -> empty center slot
     profile.center_pin = pin if isinstance(pin, str) and pin else None
+    from lol.core.i18n import LANGUAGES
+
+    lang = raw.get("language")
+    profile.language = lang if isinstance(lang, str) and lang in LANGUAGES else "en"
     return profile
 
 

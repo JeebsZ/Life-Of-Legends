@@ -13,6 +13,7 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 from lol.core import catalog, storage
+from lol.core.adventure import ADVENTURE_DAILY_COIN_CAP
 from lol.core.body import BodyMixin
 from lol.core.models import (
     BILL_REPEATS,
@@ -326,6 +327,23 @@ class Game(BodyMixin, RunMixin, StudyMixin, PremiumMixin):
         p.coins_today += granted
         p.coins += granted
         return Completion(xp, granted, levels, path_id, path_levels, capped=granted < coins)
+
+    def award_adventure_coins(self, coins: int, today: date) -> int:
+        """Grant trinket coins from defeating Adventure Run creatures under their own separate
+        daily cap (`ADVENTURE_DAILY_COIN_CAP`), independent of `DAILY_COIN_CAP`."""
+        p = self.profile
+        if p.adventure_coins_day != _iso(today):
+            p.adventure_coins_day, p.adventure_coins_today = _iso(today), 0
+        granted = max(0, min(int(coins), ADVENTURE_DAILY_COIN_CAP - p.adventure_coins_today))
+        p.adventure_coins_today += granted
+        p.coins += granted
+        return granted
+
+    def adventure_coins_remaining(self, today: date) -> int:
+        """Remaining trinket coins that can be earned from Adventure Run creatures today."""
+        p = self.profile
+        used = p.adventure_coins_today if p.adventure_coins_day == _iso(today) else 0
+        return max(0, ADVENTURE_DAILY_COIN_CAP - used)
 
     # --- quests --------------------------------------------------------------------------------
     def is_done(self, quest: Quest, today: date) -> bool:
@@ -969,6 +987,7 @@ class Game(BodyMixin, RunMixin, StudyMixin, PremiumMixin):
         sfx_volume: float | None = None,
         reduce_effects: bool | None = None,
         notify_sound: str | None = None,
+        language: str | None = None,
     ) -> None:
         """Edit profile settings; None = unchanged. Volumes are clamped to 0..1. notify_sound
         must be one of models.NOTIFY_SOUNDS (ValueError otherwise)."""
@@ -998,6 +1017,12 @@ class Game(BodyMixin, RunMixin, StudyMixin, PremiumMixin):
             if notify_sound not in NOTIFY_SOUNDS:
                 raise ValueError(f"unknown notification sound {notify_sound!r}")
             p.notify_sound = notify_sound
+        if language is not None:
+            from lol.core.i18n import LANGUAGES
+
+            if language not in LANGUAGES:
+                raise ValueError(f"unknown language {language!r}")
+            p.language = language
 
     def finish_onboarding(self, name: str, avatar_id: str) -> None:
         """Guest onboarding done: set name and avatar, never show onboarding again."""

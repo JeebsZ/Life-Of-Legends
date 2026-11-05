@@ -1,4 +1,4 @@
-"""Reusable, juicy Flet controls for Life of Legends.
+"""Reusable, juicy Flet controls for LUMA: Your Lifestyle QoL.
 
 Rules
 - Draw + animate only. No game rules, no lol.core imports: every component takes plain
@@ -742,7 +742,8 @@ class QuestCard(ft.Container):
         self._stripe = ft.Container(width=Size.STRIPE, bgcolor=pc, left=0, top=0, bottom=0,
                                     animate=Motion.anim(Motion.FADE_MS))
         self._title = ft.Text(title, size=Type.BODY + 1, weight=ft.FontWeight.W_600,
-                              color=C.TEXT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
+                              color=C.TEXT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS,
+                              tooltip=title)
         self._xp_chip = xp_chip(xp)
         self._coin_chip = coin_chip(coins)
         meta: list[ft.Control] = [self._xp_chip]
@@ -753,19 +754,21 @@ class QuestCard(ft.Container):
         if kind == "daily":
             meta.append(ft.Icon(ft.Icons.EVENT_REPEAT, size=16, color=C.TEXT_DIM,
                                 tooltip="Daily"))
-        self._note = ft.Text(note, size=Type.CAPTION, color=C.TEXT_DIM, max_lines=1,
-                             overflow=ft.TextOverflow.ELLIPSIS, visible=bool(note))
+        self._note = ft.Text(note, size=Type.CAPTION, color=C.TEXT_DIM, max_lines=2,
+                             overflow=ft.TextOverflow.ELLIPSIS, visible=bool(note),
+                             tooltip=note if note else None)
         self._check_icon = ft.Icon(ft.Icons.RADIO_BUTTON_UNCHECKED, size=Size.ICON_LG,
                                    color=C.a(C.TEXT, 0.4))
         self._check = ft.Container(self._check_icon, width=Size.TAP, height=Size.TAP,
                                    alignment=ft.Alignment.CENTER, scale=1,
                                    animate_scale=Motion.anim(Motion.POP_MS * 2, Motion.BACK))
+        full_tip = f"{title}\n{note}" if note else title
         body = ft.Row(
             [
                 self._avatar,
                 ft.Column([self._title, self._note,
                            ft.Row(meta, spacing=Space.XS + 2, wrap=True)],
-                          spacing=Space.XS, expand=True, tight=True),
+                          spacing=Space.XS, expand=True, tight=True, tooltip=full_tip),
                 self._check,
                 *([menu] if menu is not None else []),
             ],
@@ -780,7 +783,7 @@ class QuestCard(ft.Container):
                 self._stripe,
             ]),
             border_radius=Radius.MD, clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-            scale=1, opacity=1, data=data,
+            scale=1, opacity=1, data=data, tooltip=full_tip,
             animate=Motion.anim(Motion.FADE_MS),
             animate_opacity=Motion.anim(Motion.DONE_FADE_MS),
             animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK),
@@ -865,7 +868,7 @@ class BillRow(ft.Container):
     """
 
     def __init__(self, name: str, amount: float, *, status: str = "upcoming",
-                 due_label: str = "", repeat_label: str | None = None,
+                 due_label: str = "", repeat_label: str | None = None, note: str = "",
                  on_pay: Callback = None, on_click: Callback = None, data: Any = None) -> None:
         self.status, self.on_pay = status, on_pay
         self._busy = False
@@ -886,14 +889,20 @@ class BillRow(ft.Container):
         self._pay_box = ft.Container(self._pay, scale=1,
                                      animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK),
                                      animate_opacity=Motion.anim(Motion.FADE_MS))
+        full_tip = f"{name}\n{note}" if note else name
+        col_items: list[ft.Control] = [
+            ft.Text(name, size=Type.BODY + 1, weight=ft.FontWeight.W_600,
+                    color=C.TEXT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+                    tooltip=full_tip),
+        ]
+        if note:
+            col_items.append(ft.Text(note, size=Type.CAPTION, color=C.TEXT_DIM, max_lines=2,
+                                     overflow=ft.TextOverflow.ELLIPSIS, tooltip=note))
+        col_items.append(ft.Row(sub, spacing=Space.SM, wrap=True))
         super().__init__(
             content=ft.Row([
                 self._icon_box,
-                ft.Column([ft.Text(name, size=Type.BODY + 1, weight=ft.FontWeight.W_600,
-                                   color=C.TEXT, max_lines=1,
-                                   overflow=ft.TextOverflow.ELLIPSIS),
-                           ft.Row(sub, spacing=Space.SM, wrap=True)],
-                          spacing=Space.XS, expand=True, tight=True),
+                ft.Column(col_items, spacing=Space.XS, expand=True, tight=True),
                 self._amount,
                 self._pay_box,
             ], spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -903,7 +912,7 @@ class BillRow(ft.Container):
             scale=1, animate=Motion.anim(Motion.FADE_MS),
             animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK),
             animate_opacity=Motion.anim(Motion.DONE_FADE_MS),
-            on_click=on_click, data=data,
+            on_click=on_click, data=data, tooltip=full_tip,
         )
         ambient.apply_glass(self, "frost")
         self._apply(status)
@@ -965,7 +974,7 @@ class RewardTile(ft.Container):
                  owned: bool = False, active: bool = False, on_redeem: Callback = None,
                  on_use: Callback = None, width: float | None = None, data: Any = None,
                  crown: bool = False, premium_locked: bool = False,
-                 on_premium: Callback = None) -> None:
+                 on_premium: Callback = None, note: str = "") -> None:
         self.title, self.cost, self.coins, self.kind = title, cost, coins, kind
         self.owned, self.active = owned, active
         self.on_redeem, self.on_use = on_redeem, on_use
@@ -1003,15 +1012,16 @@ class RewardTile(ft.Container):
                 ft.Icon(ft.Icons.WORKSPACE_PREMIUM, size=14, color=C.BG), width=22, height=22,
                 border_radius=11, bgcolor="#F5C66B", alignment=ft.Alignment.CENTER, right=0,
                 top=0, tooltip="Premium item")], width=60, height=58)
+        full_tip = f"{title}\n{note}" if note else title
         super().__init__(
             content=ft.Column([
                 art,
                 ft.Text(title, size=Type.BODY, weight=ft.FontWeight.W_600, color=C.TEXT,
                         max_lines=2, overflow=ft.TextOverflow.ELLIPSIS,
-                        text_align=ft.TextAlign.CENTER, height=40),
+                        text_align=ft.TextAlign.CENTER, height=40, tooltip=full_tip),
                 self._cost, self._progress, self._hint, self._btn,
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=Space.SM, tight=True),
-            border_radius=Radius.MD, width=width, data=data,
+            border_radius=Radius.MD, width=width, data=data, tooltip=full_tip,
             padding=Space.MD, scale=1,
             animate=Motion.anim(Motion.FADE_MS),
             animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK),
@@ -1216,12 +1226,13 @@ class NavTab(ft.Container):
 
     def __init__(self, label: str, icon: ft.IconData, selected_icon: ft.IconData, *,
                  on_click: Callback = None) -> None:
+        self._raw_label = label
         self.glyphs = (icon, selected_icon)
         self.glyph = ft.Icon(icon, size=24, color=C.TEXT_DIM)
         self.pill = ft.Container(self.glyph, width=56, height=30, border_radius=Radius.PILL,
                                  alignment=ft.Alignment.CENTER, bgcolor=ft.Colors.TRANSPARENT,
                                  animate=Motion.anim(Motion.FADE_MS))
-        self.caption = ft.Text(label, size=Type.CAPTION, color=C.TEXT_DIM,
+        self.caption = ft.Text(th.tr(label), size=Type.CAPTION, color=C.TEXT_DIM,
                                weight=ft.FontWeight.W_500, max_lines=1)
         super().__init__(
             content=ft.Column([self.pill, self.caption], spacing=4, tight=True,
@@ -1229,6 +1240,9 @@ class NavTab(ft.Container):
                               horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             expand=1, height=NAV_H, alignment=ft.Alignment.CENTER, on_click=on_click,
         )
+
+    def refresh_label(self) -> None:
+        self.caption.value = th.tr(self._raw_label)
 
     def set_selected(self, on: bool) -> None:
         self.glyph.icon = self.glyphs[1] if on else self.glyphs[0]
@@ -1319,7 +1333,7 @@ class ArcaneSlot(ft.Container):
         self.glyph.icon = icon if self.pinned and icon else ft.Icons.ADD
         self.glyph.size = 26 if self.pinned else 30
         self.color = color if self.pinned and color else C.PRIMARY
-        self.caption.value = label if self.pinned else "Pin"
+        self.caption.value = th.tr(label) if self.pinned and label else th.tr("Pin")
         self._paint()
         refresh(self)
 
@@ -1403,6 +1417,11 @@ class ArcaneNavBar(ft.BottomAppBar):
             self.items[index].set_badge(badge)
         elif index == NAV_CENTER:
             self.slot.glyph.badge = _dot(badge)
+
+    def refresh_labels(self) -> None:
+        for tab in self.items.values():
+            tab.refresh_label()
+        refresh(self)
 
 
 def build_bottom_nav(selected_index: int = 0, on_change: Callback = None,
@@ -1503,7 +1522,9 @@ class QuestSuggestionCard(ft.Container):
             for i in range(3)
         ]
         self._title.value = title
+        self._title.tooltip = title
         self._note.value, self._note.visible = note, bool(note)
+        self._note.tooltip = note if note else None
         self._chips.controls = [xp_chip(xp), *([coin_chip(coins)] if coins else [])]
 
     def restyle(self) -> None:
@@ -1701,7 +1722,8 @@ class SideQuestCard(ft.Container):
             self._avatar,
             ft.Column([self._eyebrow,
                        ft.Text(skill_name, size=Type.TITLE, weight=ft.FontWeight.BOLD,
-                               color=C.TEXT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)],
+                               color=C.TEXT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS,
+                               tooltip=skill_name)],
                       spacing=1, expand=True, tight=True),
             self.ring, menu,
         ], spacing=Space.MD - 2, vertical_alignment=ft.CrossAxisAlignment.CENTER)
@@ -1712,13 +1734,14 @@ class SideQuestCard(ft.Container):
         for i, (title, note, xp, _coins, _done) in enumerate(self.steps):
             check = ft.Icon(ft.Icons.RADIO_BUTTON_UNCHECKED, size=Size.ICON, scale=1,
                             animate_scale=Motion.anim(Motion.POP_MS * 2, Motion.BACK))
+            step_tip = f"{title}\n{note}" if note else title
             text = ft.Text(title, size=Type.BODY, weight=ft.FontWeight.W_600, max_lines=2,
-                           overflow=ft.TextOverflow.ELLIPSIS)
+                           overflow=ft.TextOverflow.ELLIPSIS, tooltip=step_tip)
             xpc = xp_chip(xp)
             col: list[ft.Control] = [text]
             if note:
-                col.append(ft.Text(note, size=Type.CAPTION, color=C.TEXT_DIM, max_lines=2,
-                                   overflow=ft.TextOverflow.ELLIPSIS))
+                col.append(ft.Text(note, size=Type.CAPTION, color=C.TEXT_DIM, max_lines=3,
+                                   overflow=ft.TextOverflow.ELLIPSIS, tooltip=note))
             row = ft.Container(
                 ft.Row([check, ft.Column(col, spacing=1, expand=True, tight=True), xpc],
                        spacing=Space.MD - 2, vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -1728,6 +1751,7 @@ class SideQuestCard(ft.Container):
                 animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK),
                 on_click=functools.partial(self._tap_step, i),
                 on_tap_down=self._tap_down,
+                tooltip=step_tip,
             )
             self._rows.append(row)
             self._checks.append(check)

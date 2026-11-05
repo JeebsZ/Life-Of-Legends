@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
 
 from src.lol.core.adventure import (
+    ADVENTURE_DAILY_COIN_CAP,
+    CREATURES,
+    FRAGMENT_CHANCE,
     AdventureEngine,
     Creature,
     CreatureTier,
     EventType,
     TargetMode,
 )
+from src.lol.core.game import DAILY_COIN_CAP, Game
 
 
 class TestAdventure(unittest.TestCase):
@@ -221,6 +226,60 @@ class TestAdventure(unittest.TestCase):
         normal_mob = next(c for c in cluster.creatures if c.tier == CreatureTier.NORMAL)
         manual_selected = cluster.select_target(mode=TargetMode.MANUAL, manual_id=normal_mob.id)
         self.assertEqual(manual_selected.id, normal_mob.id)
+
+    def test_all_11_creature_definitions_and_fragment_chances(self):
+        """Verify all 11 creature sprites and cosmetic fragment drop chances."""
+        expected_sprites = {
+            "Goblin Scout.png",
+            "Goblin Soldier.png",
+            "Goblin General.png",
+            "Slime.png",
+            "BigSlime.png",
+            "KingSlime.png",
+            "Bat.png",
+            "BatKing.png",
+            "Boar.png",
+            "WildBoar.png",
+            "HugeBoar.png",
+        }
+        self.assertEqual(len(CREATURES), 11)
+        self.assertEqual({c.sprite for c in CREATURES.values()}, expected_sprites)
+        self.assertEqual(FRAGMENT_CHANCE[CreatureTier.NORMAL], 0.05)
+        self.assertEqual(FRAGMENT_CHANCE[CreatureTier.LEADER], 0.25)
+        self.assertEqual(FRAGMENT_CHANCE[CreatureTier.BOSS], 0.80)
+
+        # Verify trinket coin drop ranges: 1..5 for Normal/Leader, <= 10 (around 8..10) for Boss
+        for c in CREATURES.values():
+            lo, hi = c.coins
+            self.assertLessEqual(lo, hi)
+            if c.tier in (CreatureTier.NORMAL, CreatureTier.LEADER):
+                self.assertGreaterEqual(lo, 1)
+                self.assertLessEqual(hi, 5)
+            else:
+                self.assertGreaterEqual(lo, 8)
+                self.assertLessEqual(hi, 10)
+
+    def test_adventure_coin_cap_is_separate_from_daily_quest_coin_cap(self):
+        """Creature trinket coins have their own daily cap and do not consume DAILY_COIN_CAP."""
+        g = Game()
+        today = date(2026, 11, 5)
+
+        # Max out the main quest/bill daily coin cap
+        g._award(xp=0, coins=DAILY_COIN_CAP, path_id="warrior", today=today)
+        self.assertEqual(g.profile.coins, DAILY_COIN_CAP)
+        self.assertEqual(g.profile.coins_today, DAILY_COIN_CAP)
+
+        # Defeating creatures still grants trinket coins up to ADVENTURE_DAILY_COIN_CAP
+        granted_1 = g.award_adventure_coins(10, today)
+        self.assertEqual(granted_1, 10)
+        self.assertEqual(g.profile.coins, DAILY_COIN_CAP + 10)
+        self.assertEqual(g.adventure_coins_remaining(today), ADVENTURE_DAILY_COIN_CAP - 10)
+
+        # Exceeding ADVENTURE_DAILY_COIN_CAP clamps to remaining adventure cap
+        granted_2 = g.award_adventure_coins(50, today)
+        self.assertEqual(granted_2, ADVENTURE_DAILY_COIN_CAP - 10)
+        self.assertEqual(g.adventure_coins_remaining(today), 0)
+        self.assertEqual(g.profile.coins, DAILY_COIN_CAP + ADVENTURE_DAILY_COIN_CAP)
 
 
 if __name__ == "__main__":

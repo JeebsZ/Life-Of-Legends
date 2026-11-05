@@ -256,8 +256,15 @@ def path_icon(path_id: str | None) -> ft.IconData:
     return PATH_ICONS.get(path_id or "", ft.Icons.STAR)
 
 
+def tr(text: str) -> str:
+    """Translate a UI label using the active language (core/i18n.py)."""
+    from lol.core.i18n import tr as _tr
+
+    return _tr(text)
+
+
 def path_name(path_id: str | None) -> str:
-    return PATH_NAMES.get(path_id or "", (path_id or "Quest").title())
+    return tr(PATH_NAMES.get(path_id or "", (path_id or "Quest").title()))
 
 
 def glowing() -> bool:
@@ -295,8 +302,9 @@ def _apply_glow(ctrl: ft.Container, border: bool) -> None:
 
 
 def label(text: str) -> str:
-    """Label/eyebrow casing: uppercase under Arcane, as written elsewhere."""
-    return text.upper() if current().glow else text
+    """Label/eyebrow casing: translated, then uppercase under Arcane, as written elsewhere."""
+    t = tr(text)
+    return t.upper() if current().glow else t
 
 
 def label_spacing() -> float | None:

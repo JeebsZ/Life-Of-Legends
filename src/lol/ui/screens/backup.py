@@ -124,7 +124,7 @@ class BackupScreen:
         """True saved / downloading, False cancelled, None failed."""
         try:
             path = await self.picker().save_file(
-                dialog_title="Save Life of Legends export", file_name=name,
+                dialog_title="Save LUMA: Your Lifestyle QoL export", file_name=name,
                 file_type=ft.FilePickerFileType.CUSTOM, allowed_extensions=[ext],
                 src_bytes=data)
         except Exception as exc:  # noqa: BLE001 - any platform failure -> fallback below
@@ -157,7 +157,7 @@ class BackupScreen:
             await ft.Share().share_files(
                 [ft.ShareFile.from_bytes(self._json_bytes(), mime_type="application/json",
                                          name=name)],
-                subject="Life of Legends backup")
+                subject="LUMA: Your Lifestyle QoL backup")
         except Exception:  # noqa: BLE001
             self.app.error("Sharing isn't available here. Try Export instead.")
 
@@ -182,7 +182,7 @@ class BackupScreen:
         app = self.app
         try:
             files = await self.picker().pick_files(
-                dialog_title="Choose a Life of Legends backup",
+                dialog_title="Choose a LUMA: Your Lifestyle QoL backup",
                 file_type=ft.FilePickerFileType.CUSTOM, allowed_extensions=["json"],
                 with_data=True)
         except Exception as exc:  # noqa: BLE001
@@ -195,7 +195,7 @@ class BackupScreen:
             raw = f.bytes if f.bytes is not None else Path(f.path or "").read_bytes()
             data = storage.import_json(raw.decode("utf-8-sig"), app.today())
         except (OSError, UnicodeDecodeError, ValueError) as exc:
-            app.error(f"That file isn't a Life of Legends backup: {exc}")
+            app.error(f"That file isn't a LUMA: Your Lifestyle QoL backup: {exc}")
             return
         s = storage.summary(data)
         what = (f"{data.profile.name} · Lv {data.profile.level} · {s['quests']} quests, "

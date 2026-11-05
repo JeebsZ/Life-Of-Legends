@@ -5,10 +5,10 @@ Phases: pre (mode, goal, Challenge card, safety advice, GPS status, options, bes
 -> live (map + big numbers, pause / resume / finish) -> summary (route, splits, kcal, steps,
 tier badges). A past run opens the same summary.
 
-Honest limits, said on screen: tracking works only while the app is open and on screen; no
-background / locked-screen tracking yet. Steps and kcal are estimates. Map tiles come from
-OpenStreetMap (attribution always visible); a public release should switch to a keyed tile
-provider. Rules and math live in core (run.py, runlog.py, run_cues.py)."""
+Honest limits, said on screen: tracking continues in the background and while the screen is
+off or tabbed out. Steps and kcal are estimates. Map tiles come from OpenStreetMap (attribution
+always visible); a public release should switch to a keyed tile provider. Rules and math live in
+core (run.py, runlog.py, run_cues.py)."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import flet.canvas as cv
 
 from lol.core import premium
 from lol.core import run as rcore
-from lol.core.adventure import AdventureEngine
+from lol.core.adventure import AdventureEngine, EventType
 from lol.core.models import RunEntry
 from lol.core.run_cues import CUE_EVERY, CueCoach
 from lol.core.runlog import CHALLENGE_COINS, CHALLENGE_XP, MIN_LOG_M, PACE_BADGES, TIER_BY_ID
@@ -52,13 +52,14 @@ CUE_LABELS = {"1km": "Every 1 km", "0.5km": "Every 0.5 km", "5min": "Every 5 min
 ROUTE_COLOR = "#FF8A5B"
 LIVE_MAP_POINTS = 400  # the live polyline is thinned to this many points
 TICK_S = 1.0
-ADV_MAX_TICK_S = 3.0  # adventure: longest gap one tick may count (app backgrounded, lag)
+ADV_MAX_TICK_S = 3.0  # adventure: longest slice per step (background gaps are stepped in slices)
+ADV_MAX_BG_GAP_S = 300.0  # adventure: max background gap replayed in slices
 WAKE_TIMEOUT_S = 1.5  # keep-awake enable/disable; web never answers
 MAP_EVERY_S = 2.0  # wall seconds between polyline redraws (keeps the web client snappy)
 FOLLOW_EVERY_S = 3.0
 GOOD_ACC, OK_ACC = 10.0, rcore.MAX_ACCURACY_M
-HONEST_NOTE = ("Tracking works only while Life of Legends is open on screen. Background and "
-               "locked-screen tracking aren't supported yet.")
+HONEST_NOTE = ("Tracking continues in the background even if your screen is turned off or you "
+               "tab out to another app.")
 # Adventure card sound names -> (sfx name, volume scale). Swap in real files later by adding
 # them to sfx.py and pointing these entries at them.
 ADVENTURE_SOUNDS: dict[str, tuple[str, float | None]] = {
@@ -149,6 +150,7 @@ class RunScreen:
         self.live_marks: Any = None
         self.adventure_engine = AdventureEngine()
         self.adventure_card: AdventureRunCard | None = None
+        self._adv_state: dict[str, float] = {"dist": 0.0, "t": 0.0, "last_step": 0.0}
         self._build_live()
 
     def _play_adventure_sound(self, sound_name: str) -> None:
@@ -201,6 +203,9 @@ class RunScreen:
             self.pos = (fix.lat, fix.lon)
         if self.phase == "live" and self.tracker is not None:
             self.tracker.add(fix)
+            now = self.gps.now()
+            if now - self._adv_state.get("last_step", 0.0) >= TICK_S:
+                self._step_live(now)
         elif self.phase == "pre":
             self._paint_gps()
 
@@ -444,9 +449,9 @@ class RunScreen:
             self.app.save()
 
         return common.card(ft.Column([
-            common.switch_row("Keep screen awake", "Recommended: tracking pauses if the app "
-                              "goes to the background", s.keep_awake, awake,
-                              icon=ft.Icons.SCREEN_LOCK_PORTRAIT),
+            common.switch_row("Keep screen awake", "Keep display on while viewing Run (tracking "
+                              "also continues with screen off or in background)", s.keep_awake,
+                              awake, icon=ft.Icons.SCREEN_LOCK_PORTRAIT),
             common.switch_row("Voice cues", "Distance, time, pace and steps, halfway, goal, "
                               "water and pacing nudges", s.voice_cues, cues,
                               icon=ft.Icons.RECORD_VOICE_OVER),
@@ -731,7 +736,7 @@ class RunScreen:
 
     def _update_map(self, now: float) -> None:
         tr = self.tracker
-        if tr is None or self.live_map is None:
+        if tr is None or self.live_map is None or not getattr(self.live_map, "page", None):
             return
         import flet_map as fm
 
@@ -818,6 +823,7 @@ class RunScreen:
         goal_m = TIER_BY_ID[self.goal].meters if self.goal else None
         self.coach = CueCoach(s.mode, s.cue_every, goal_m, uncleared)
         self.adventure_engine = AdventureEngine()
+        self._adv_state = {"dist": 0.0, "t": now, "last_step": now}
         self.started = datetime.now().strftime("%H:%M")
         self.phase = "live"
         self.gen += 1
@@ -838,43 +844,70 @@ class RunScreen:
         await ui.buzz("medium")
 
     async def _tick(self, gen: int) -> None:
-        adv = {"dist": 0.0, "t": self.gps.now()}
         while self.gen == gen and self.phase == "live":
             await asyncio.sleep(TICK_S)
             if self.gen != gen or self.phase != "live" or self.tracker is None:
                 return
             now = self.gps.now()
-            self._paint_live()
-            wall = time.monotonic()
-            n = len(self.tracker.points)
-            if wall - self._last_map >= MAP_EVERY_S and n != self._map_points:
-                self._last_map, self._map_points = wall, n
-                self._update_map(now)  # the polyline is the heavy part: every 2 s at most
-            with contextlib.suppress(Exception):  # the adventure must never break a run
-                self._adventure_tick(now, adv)
+            if now - self._adv_state.get("last_step", 0.0) >= TICK_S * 0.5:
+                self._step_live(now)
+
+    def _step_live(self, now: float) -> None:
+        """Advance live stats, map, Adventure Run combat and voice cues. Called by both the 1s
+        timer loop and incoming GPS fixes so background / screen-off runs never stall."""
+        if self.phase != "live" or self.tracker is None:
+            return
+        self._adv_state["last_step"] = now
+        self._paint_live()
+        wall = time.monotonic()
+        n = len(self.tracker.points)
+        if wall - self._last_map >= MAP_EVERY_S and n != self._map_points:
+            self._last_map, self._map_points = wall, n
+            self._update_map(now)  # the polyline is the heavy part: every 2 s at most
+        with contextlib.suppress(Exception):  # the adventure must never break a run
+            self._adventure_tick(now, self._adv_state)
+        if getattr(self.live_view, "page", None):
             ui.refresh(self.live_view)
-            self._cues(now)
+        self._cues(now)
 
     def _adventure_tick(self, now: float, adv: dict[str, float]) -> None:
         """Feed the Adventure engine from the tracker. No GPS permission, no fix yet
         (emulator / Bluestacks / PC), paused or auto-paused -> 0 km/h: the pack waits and
-        nothing crashes. A long gap (app was backgrounded) is capped so it can't one-shot."""
+        nothing crashes. Background gaps are stepped in slices up to ADV_MAX_TICK_S so
+        combat progress, spawns, and trinket coin drops continue while tabbed out or locked."""
         tr, card = self.tracker, self.adventure_card
         if tr is None:
             return
-        delta_s = min(ADV_MAX_TICK_S, max(0.0, now - adv["t"]))
-        dist_inc = max(0.0, tr.distance_m - adv["dist"])
+        raw_delta = min(ADV_MAX_BG_GAP_S, max(0.0, now - adv["t"]))
+        total_dist_inc = max(0.0, tr.distance_m - adv["dist"])
         adv["t"], adv["dist"] = now, tr.distance_m
         speed_kmh = 0.0
         if not (tr.paused or tr.auto_paused(now) or self.perm != gps.GRANTED or not tr.points):
             pace = tr.current_pace(now)
             if pace and pace > 0:
                 speed_kmh = 3600.0 / pace
-            elif delta_s > 0 and dist_inc > 0:
-                speed_kmh = dist_inc / delta_s * 3.6
-        events = self.adventure_engine.update_tick(delta_s, speed_kmh, dist_inc)
+            elif raw_delta > 0 and total_dist_inc > 0:
+                speed_kmh = total_dist_inc / raw_delta * 3.6
+        steps = max(1, math.ceil(raw_delta / ADV_MAX_TICK_S)) if raw_delta > 0 else 1
+        step_dt = raw_delta / steps if raw_delta > 0 else 0.0
+        step_dist = total_dist_inc / steps
+        all_events = []
+        coins_granted_total = 0
+        today = self.app.today()
+        for _ in range(steps):
+            evs = self.adventure_engine.update_tick(step_dt, speed_kmh, step_dist)
+            for ev in evs:
+                if ev.event_type == EventType.CREATURE_DEFEATED and ev.coins_gained > 0:
+                    granted = self.app.game.award_adventure_coins(ev.coins_gained, today)
+                    ev.coins_gained = granted
+                    coins_granted_total += granted
+            all_events.extend(evs)
+        if coins_granted_total > 0:
+            self.app.save()
+            with contextlib.suppress(Exception):
+                self.app.page.run_task(self.app.coins_changed)
         if card is not None:
-            card.process_tick_events(events)
+            card.process_tick_events(all_events)
             card.refresh_display(current_speed_kmh=speed_kmh)
 
     def _cues(self, now: float) -> None:

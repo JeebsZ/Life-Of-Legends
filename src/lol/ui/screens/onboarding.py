@@ -627,7 +627,7 @@ class Onboarding(ft.Container):
             ok = await common.confirm(
                 app.page, "A gentle daily nudge?",
                 "Luma can remind you once a day while a quest is open, plus bills and your "
-                "focus timer. Your phone will ask once if Life of Legends may send "
+                "focus timer. Your phone will ask once if LUMA: Your Lifestyle QoL may send "
                 "notifications.", "Continue")
             granted = ok and await notify.ensure_permission()
             if not granted:

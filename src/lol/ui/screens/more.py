@@ -249,7 +249,7 @@ class MoreScreen:
             items.append(common.card(ft.ResponsiveRow(
                 [self._tile(k) for k in keys], spacing=Space.XS, run_spacing=Space.MD),
                 padding=Space.MD))
-        items.append(ft.Container(common.hint("Life of Legends · saved on this device"),
+        items.append(ft.Container(common.hint("LUMA: Your Lifestyle QoL · saved on this device"),
                                   alignment=ft.Alignment.CENTER, padding=Space.MD))
         self.grid.controls = items
 

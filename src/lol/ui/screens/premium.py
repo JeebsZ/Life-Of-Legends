@@ -99,8 +99,8 @@ class PremiumScreen:
                     ft.Text(t, size=Type.BODY, color=C.TEXT, expand=True)], spacing=Space.SM)
             for t in ALWAYS_FREE], spacing=Space.SM, tight=True)))
         items.append(ft.Container(common.hint(
-            "Your support keeps Life of Legends growing. No pressure: the core game stays "
-            "free forever."), alignment=ft.Alignment.CENTER, padding=Space.SM))
+            "Your support keeps LUMA: Your Lifestyle QoL growing. No pressure: the core game "
+            "stays free forever."), alignment=ft.Alignment.CENTER, padding=Space.SM))
         self.list.controls = items
 
     def _hero(self, is_prem: bool) -> ft.Control:
@@ -214,7 +214,8 @@ class PremiumScreen:
             ft.Row([ft.Icon(ft.Icons.SCHOOL, color=C.PRIMARY, size=20),
                     ft.Text("Student discount", size=Type.BODY, weight=ft.FontWeight.W_700,
                             color=C.TEXT)], spacing=Space.SM),
-            common.hint("Got a code from your school or our socials? Enter it here."),
+            common.hint("Got a school or promo code? Enter it here; it applies when the store "
+                        "is connected."),
             field,
             ft.Row([common.secondary_button("Apply code", apply, icon=ft.Icons.CHECK)]),
         ], spacing=Space.SM, tight=True), padding=Space.MD)
@@ -317,8 +318,7 @@ def _dev_card(app: App, on_change: Any) -> ft.Control:
 
     st = g.data.premium
     return common.card(ft.Column([
-        common.hint("Test switches. Store builds ignore them: premium only ever comes from the "
-                    "store, never from the save file."),
+        common.hint("Test switches only. Store builds ignore this whole section."),
         common.switch_row(f"Simulate {PREMIUM_NAME}", "Dev toggle, nothing is charged",
                           st.dev_premium, toggle, icon=ft.Icons.WORKSPACE_PREMIUM),
         ft.Row([common.secondary_button("Reset usage counters", reset,
@@ -345,6 +345,6 @@ def _version_label(app: App, on_change: Any) -> ft.Control:
             app.toast(f"{left} more tap{'s' if left > 1 else ''} for developer options",
                       ft.Icons.BUILD)
 
-    return ft.Container(common.hint(f"Life of Legends v{APP_VERSION}"),
+    return ft.Container(common.hint(f"LUMA: Your Lifestyle QoL v{APP_VERSION}"),
                         alignment=ft.Alignment.CENTER, height=Size.TAP, on_click=tap,
                         key="version_label")

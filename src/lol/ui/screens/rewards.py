@@ -55,7 +55,7 @@ class RewardsScreen:
             for r in personal:
                 tile = ui.RewardTile(r.title, r.cost, coins=coins, icon=ft.Icons.CARD_GIFTCARD,
                                      on_redeem=lambda t, rid=r.id: self._redeem(t, rid),
-                                     data=r.id)
+                                     data=r.id, note=r.note)
                 self.tiles.append(tile)
                 edit = ft.Container(
                     common.menu_button([

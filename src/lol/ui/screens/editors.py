@@ -45,6 +45,7 @@ def quest_form(app: App, sheet_title: str, initial: dict, on_save: Callable[[dic
     title.value = initial.get("title", "")
     title.max_length = 60
     note = common.text_field("Note (optional)")
+    note.multiline, note.min_lines, note.max_lines = True, 1, 4
     note.value = initial.get("note", "")
     paths = common.ChoicePills(common.path_options(), st["path"],
                                on_change=lambda v: st.update(path=v))
@@ -163,6 +164,7 @@ def edit_quest(app: App, quest_id: str, on_saved: Callable[[], Any]) -> None:
     title = common.text_field("Quest title")
     title.value, title.max_length = q.title, 60
     note = common.text_field("Note (optional)")
+    note.multiline, note.min_lines, note.max_lines = True, 1, 4
     note.value = q.note
     reward_hint = common.hint("")
 
@@ -232,6 +234,7 @@ def edit_reward(app: App, reward_id: str, on_saved: Callable[[], Any]) -> None:
     title = common.text_field("Reward name")
     title.value = r.title
     note = common.text_field("Note (optional)")
+    note.multiline, note.min_lines, note.max_lines = True, 1, 4
     note.value = r.note
 
     def save(_: Any = None) -> None:
@@ -288,6 +291,7 @@ def edit_bill(app: App, bill_id: str, on_saved: Callable[[], Any]) -> None:
     name = common.text_field("Bill name")
     name.value = b.name
     note = common.text_field("Note (optional)")
+    note.multiline, note.min_lines, note.max_lines = True, 1, 4
     note.value = b.note
 
     def keep_text() -> bool:

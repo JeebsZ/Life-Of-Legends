@@ -106,14 +106,26 @@ class PhoneGps:
             import flet as ft
 
             return fg.GeolocatorAndroidConfiguration(
-                accuracy=fg.GeolocatorPositionAccuracy.BEST, distance_filter=0,
-                interval_duration=ft.Duration(seconds=1))
+                accuracy=fg.GeolocatorPositionAccuracy.BEST,
+                distance_filter=0,
+                interval_duration=ft.Duration(seconds=1),
+                foreground_notification_config=fg.ForegroundNotificationConfiguration(
+                    notification_title="LUMA: Run & Walk Active",
+                    notification_text="Tracking your route and Adventure Run in the background.",
+                    notification_channel_name="LUMA Run Tracking",
+                    notification_enable_wake_lock=True,
+                    notification_set_ongoing=True,
+                ),
+            )
         if plat == "ios":
             return fg.GeolocatorIosConfiguration(
-                accuracy=fg.GeolocatorPositionAccuracy.BEST, distance_filter=0,
+                accuracy=fg.GeolocatorPositionAccuracy.BEST,
+                distance_filter=0,
                 activity_type=fg.GeolocatorIosActivityType.FITNESS,
                 pause_location_updates_automatically=False,
-                allow_background_location_updates=False)
+                allow_background_location_updates=True,
+                show_background_location_indicator=True,
+            )
         return fg.GeolocatorConfiguration(accuracy=fg.GeolocatorPositionAccuracy.BEST)
 
     @staticmethod

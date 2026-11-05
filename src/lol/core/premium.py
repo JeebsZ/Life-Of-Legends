@@ -91,7 +91,7 @@ FREE_ENTITLEMENT = Entitlement()
 def resolve_entitlement(store: Entitlement | None, dev_premium: bool,
                         dev_allowed: bool) -> Entitlement:
     """THE single decision point. The store's answer wins; the dev toggle only in dev builds;
-    a save-file flag alone is never enough."""
+    a raw boolean flag in the save file alone is never enough."""
     if store is not None and store.tier == PREMIUM:
         return store
     if dev_allowed and DEV_BUILD and dev_premium:
@@ -304,7 +304,7 @@ PROMO_RE = re.compile(r"^[A-Z0-9]{4,16}(-[A-Z0-9]{2,8})?$")
 
 
 def check_promo(code: str) -> tuple[bool, str]:
-    """Stub validation (format only). Part 2: Play promo codes are redeemed by the store."""
+    """Part 1 stub: validate the shape; real codes are checked by the store in Part 2."""
     c = code.strip().upper()
     if not c:
         return False, "Type your code first."
@@ -363,8 +363,11 @@ class PremiumMixin:
         return dev_allowed(self.dev_env, self.data.premium)
 
     def entitlement(self) -> Entitlement:
-        return resolve_entitlement(self.store_entitlement, self.data.premium.dev_premium,
-                                   self.dev_allowed())
+        return resolve_entitlement(
+            self.store_entitlement,
+            self.data.premium.dev_premium,
+            self.dev_allowed(),
+        )
 
     def is_premium(self, today: date | None = None) -> bool:
         """Premium now. Without a day the store's expiry is not checked (tier only)."""

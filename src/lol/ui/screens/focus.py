@@ -100,7 +100,7 @@ class FocusScreen:
             self._ensure_loop()
 
     def on_leave(self) -> None:
-        self._alive = False  # the loop ends; elapsed time keeps counting from started_at
+        self._alive = False  # UI updates pause while away; background loop keeps counting
 
     def _ensure_loop(self) -> None:
         if not self._loop_task:
@@ -109,9 +109,10 @@ class FocusScreen:
 
     async def _loop(self) -> None:
         try:
-            while self._alive and self.running and not self.paused:
-                self._paint_time()
-                self.spiral.advance(1.0)  # rings turn one second's worth per tick
+            while self.running and not self.paused:
+                if self._alive:
+                    self._paint_time()
+                    self.spiral.advance(1.0)  # rings turn one second's worth per tick
                 planned = self.planned()
                 if planned is not None and self.elapsed() >= planned:
                     await self._finish()

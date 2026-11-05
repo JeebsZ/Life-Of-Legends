@@ -8,7 +8,8 @@ Defeats pay XP, coins and a chance at a cosmetic fragment (by tier).
 
 The UI reads `AdventureEvent`s returned by update_tick() to drive sounds and animations.
 Sprites live in src/assets/creatures/<sprite>; this module only knows the file names.
-Rewards are tallied on the engine; they are not written into the save.
+Defeated creatures drop trinket coins (1-5 for Normal/Leader, up to 10 for Boss) governed by a
+separate daily adventure coin cap (`ADVENTURE_DAILY_COIN_CAP`).
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ MILESTONES_M: tuple[int, ...] = (1000, 3000, 5000, 10000)
 BOSS_CHANCE = 0.20
 NORMAL_COUNT = (2, 3)  # inclusive range of NORMAL mobs per pack
 HP_SCALE_PER_KM = 0.15  # packs get +15% HP per km already covered
+ADVENTURE_DAILY_COIN_CAP = 30  # separate daily cap for creature trinket coin drops
 
 STILL_KMH = 2.5
 WALK_MAX_KMH = 5.5
@@ -83,17 +85,17 @@ def _d(name: str, family: str, tier: CreatureTier, hp: tuple[int, int], xp: tupl
 
 _N, _L, _B = CreatureTier.NORMAL, CreatureTier.LEADER, CreatureTier.BOSS
 CREATURES: dict[str, CreatureDef] = {c.key: c for c in (
-    _d("Goblin Scout", "goblin", _N, (45, 65), (12, 18), (5, 10)),
-    _d("Goblin Soldier", "goblin", _L, (130, 180), (40, 60), (25, 40)),
-    _d("Goblin General", "goblin", _B, (380, 500), (160, 250), (90, 150)),
-    _d("Slime", "slime", _N, (40, 55), (10, 16), (4, 9)),
-    _d("BigSlime", "slime", _L, (120, 170), (38, 55), (22, 36)),
-    _d("KingSlime", "slime", _B, (360, 480), (150, 230), (80, 140)),
-    _d("Bat", "bat", _N, (35, 50), (11, 17), (5, 9)),
-    _d("BatKing", "bat", _B, (340, 460), (150, 240), (85, 145)),
-    _d("Boar", "boar", _N, (50, 70), (13, 19), (6, 11)),
-    _d("WildBoar", "boar", _L, (140, 190), (42, 62), (26, 42)),
-    _d("HugeBoar", "boar", _B, (400, 520), (170, 260), (95, 155)),
+    _d("Goblin Scout", "goblin", _N, (45, 65), (12, 18), (1, 3)),
+    _d("Goblin Soldier", "goblin", _L, (130, 180), (40, 60), (3, 5)),
+    _d("Goblin General", "goblin", _B, (380, 500), (160, 250), (8, 10)),
+    _d("Slime", "slime", _N, (40, 55), (10, 16), (1, 2)),
+    _d("BigSlime", "slime", _L, (120, 170), (38, 55), (3, 4)),
+    _d("KingSlime", "slime", _B, (360, 480), (150, 230), (8, 10)),
+    _d("Bat", "bat", _N, (35, 50), (11, 17), (1, 2)),
+    _d("BatKing", "bat", _B, (340, 460), (150, 240), (8, 10)),
+    _d("Boar", "boar", _N, (50, 70), (13, 19), (2, 3)),
+    _d("WildBoar", "boar", _L, (140, 190), (42, 62), (4, 5)),
+    _d("HugeBoar", "boar", _B, (400, 520), (170, 260), (9, 10)),
 )}
 FAMILIES: tuple[str, ...] = ("goblin", "slime", "bat", "boar")
 
