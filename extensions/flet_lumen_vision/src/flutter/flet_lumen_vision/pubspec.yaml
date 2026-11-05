@@ -1,0 +1,27 @@
+name: flet_lumen_vision
+description: Life of Legends on-device food classifier (Flet extension wrapping tflite_flutter).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+  flutter: ">=3.38.1"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # LiteRT (TensorFlow Lite) through dart:ffi. 0.12.1 = LiteRT 1.4.0 with 16 KB page-size
+  # aligned native libs (needed for Google Play). Image decode/resize uses dart:ui only.
+  tflite_flutter: ^0.12.1
+
+  # The app's generated pubspec pins `flet` via dependency_overrides, so this
+  # constraint only has to be compatible with it.
+  flet: ">=1.0.5 <2.0.0"
+
+flutter:
+  # Google AIY food_V1 (Apache-2.0), see README "Model". Loaded from
+  # "packages/flet_lumen_vision/assets/..." at runtime.
+  assets:
+    - assets/food_v1.tflite
+    - assets/food_v1_labels.txt

@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lol-web",
+      "runtimeExecutable": ".venv/Scripts/flet.exe",
+      "runtimeArgs": [
+        "run",
+        "--web",
+        "--port",
+        "8550",
+        "src/main.py"
+      ],
+      "port": 8550
+    }
+  ]
+}

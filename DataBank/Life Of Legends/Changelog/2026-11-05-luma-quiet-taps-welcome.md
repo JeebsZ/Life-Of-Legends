@@ -1,0 +1,5 @@
+# 2026-11-05 - Luma rename, quiet taps, welcome back
+
+- **Silent button clicks.** `sfx.SILENT` (`tap`, `toggle_on`) mutes plain button taps and toggle/select clicks app-wide; call sites unchanged, so it is one line to undo. Reward/progress sounds, notices, typing, loading, power_up and navigation (holo tab sweeps, back) still play. SFX gallery marks muted sounds.
+- **Lumen -> Luma** in every user-facing string, notice header, notification title/channel name, Settings/Profile labels and the greeting clips (Piper reads "Luma" as LOO-mah). Internal names stay: `LumenNotice`, `LumenThinking`, `flet_lumen_notify` / `flet_lumen_vision`, `lumen_hum`, `app.lumen()`, `ui.lumen_analyze`, channel id `lumen`. Spec renamed to [[luma-voice-spec]]. Onboarding copy is handled separately.
+- **Welcome back.** On app open and resume, after power_up (now a mixer FOREGROUND sound, so the voice waits for it), Luma shows + speaks one of 6 `hello_again` lines picked by `core/welcome.py` (morning / day / evening / night / away after 2+ quiet days), at most once per 30 min (in-memory: a cold start always greets). Voice off -> silent notice only.

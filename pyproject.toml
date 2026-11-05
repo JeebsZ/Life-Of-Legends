@@ -1,0 +1,75 @@
+[project]
+name = "lifeoflegends"
+version = "0.1.0"
+description = "Life of Legends - gamify your life. Mobile-first, runs on PC too."
+requires-python = ">=3.12"
+dependencies = [
+    "flet>=1.0,<2",
+    "flet-camera>=1.0,<2",
+    "flet-audio>=1.0.5,<2",
+    "flet-permission-handler>=1.0.5,<2",
+    "flet-geolocator>=1.0.5,<2",
+    "flet-map>=1.0.5,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9", "ruff>=0.17"]
+
+[tool.flet]
+org = "com.jarvin"
+product = "Life of Legends"
+company = "Jarvin"
+
+[tool.flet.app]
+path = "src"
+# Raw sound packs stay out of the APK (license: no redistributing the pack); copy only the
+# sounds you use into assets/sfx. Backslash because flet matches Windows-relative paths.
+exclude = ['assets\customsfx', 'assets\ogg']
+
+# Android ships the compressed OGG copies (tools/sfx/encode_ogg.py) instead of the WAVs; the
+# platform value replaces the global list above for Android builds.
+[tool.flet.android.app]
+exclude = ['assets\customsfx', 'assets\sfx', 'assets\voice']
+
+# --- Phone notifications (see extensions/flet_lumen_notify/README.md) ---
+# Our own Flet extension, only for the Android build. It is not on PyPI, so it is
+# not in [project].dependencies; `dev_packages` tells `flet build` to pip-install
+# it from the local folder (path is relative to this file's directory).
+[tool.flet.android]
+dependencies = ["flet-lumen-notify", "flet-lumen-vision"]
+# Android 8.0+. flutter_local_notifications relies on java.time, which is built in
+# from API 26; this lets the extension skip core library desugaring, which
+# `flet build` has no switch for (see extensions/flet_lumen_notify/README.md).
+min_sdk_version = 26
+
+# tflite_flutter 0.12.1 (food scan) compiles Java at 11 but Kotlin at 17; Gradle rejects the
+# mismatch by default. Both run fine on Android, so downgrade the check to a warning.
+[tool.flet.android.gradle_properties]
+"kotlin.jvm.target.validation.mode" = "warning"
+
+[tool.flet.dev_packages]
+flet-lumen-notify = "extensions/flet_lumen_notify"
+flet-lumen-vision = "extensions/flet_lumen_vision"
+
+# POST_NOTIFICATIONS: Android 13+ runtime permission. RECEIVE_BOOT_COMPLETED: re-arm
+# scheduled reminders after a reboot. VIBRATE: notification vibration. (The
+# extension's own AndroidManifest.xml declares these too, plus the
+# flutter_local_notifications receivers; listing them here keeps them visible.)
+[tool.flet.android.permission]
+"android.permission.POST_NOTIFICATIONS" = true
+"android.permission.RECEIVE_BOOT_COMPLETED" = true
+"android.permission.VIBRATE" = true
+# CAMERA: meal photo scan (flet-camera); denied -> the app falls back to the gallery.
+"android.permission.CAMERA" = true
+# Location: walk/run tracker, only while the app is open (no background location).
+"android.permission.ACCESS_FINE_LOCATION" = true
+"android.permission.ACCESS_COARSE_LOCATION" = true
+"android.permission.WAKE_LOCK" = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]

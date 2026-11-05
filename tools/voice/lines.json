@@ -1,0 +1,56 @@
+{
+  "quest_done_1": "Notice. Quest cleared.",
+  "quest_done_2": "Notice. Objective complete.",
+  "quest_done_3": "Confirmed. Quest cleared.",
+
+  "level_up_1": "Notice. Individual level increased.",
+  "level_up_2": "Confirmed. Level up.",
+  "level_up_3": "Notice. Level threshold crossed.",
+
+  "path_level_1": "Confirmed. Path level increased.",
+  "path_level_2": "Confirmed. Your path has advanced.",
+  "path_level_3": "Confirmed. Growth detected.",
+
+  "skill_acquired_1": "Skill acquired.",
+  "skill_acquired_2": "Notice. New skill acquired.",
+  "skill_acquired_3": "Confirmed. Skill acquired. Well done.",
+
+  "proposal_1": "Proposal ready.",
+  "proposal_2": "Proposal. Suited to now.",
+  "proposal_3": "Proposal. Worth a try.",
+
+  "quest_accepted_1": "Confirmed. Added to today.",
+  "quest_accepted_2": "Confirmed. Proposal accepted.",
+  "quest_accepted_3": "Notice. Quest registered for today.",
+
+  "bill_due_1": "Advisory. A bill is due soon.",
+  "bill_due_2": "Advisory. A payment is coming up.",
+
+  "bill_paid_1": "Confirmed. Payment recorded.",
+  "bill_paid_2": "Confirmed. Bill paid.",
+  "bill_paid_3": "Confirmed. Payment logged.",
+
+  "reward_redeemed_1": "Reward granted. Enjoy it, you earned it.",
+  "reward_redeemed_2": "Confirmed. Reward granted.",
+  "reward_redeemed_3": "Reward released. Enjoy.",
+
+  "coin_cap_1": "Today's coin limit reached. Experience still counts.",
+  "coin_cap_2": "Notice. Daily coin limit reached.",
+
+  "welcome_back_1": "Resuming is also a skill. Shall we continue?",
+  "welcome_back_2": "Welcome back.",
+  "welcome_back_3": "Welcome back. Shall we continue from here?",
+
+  "analysis_1": "Analysis complete.",
+  "analysis_2": "Analysis complete. Your report is ready.",
+
+  "greeting_1": "Hello. I am Luma. I will guide your progress.",
+  "greeting_2": "Hello. I am Luma. Shall we begin?",
+
+  "hello_again_1": "Good morning. Luma online. Your quests are ready when you are.",
+  "hello_again_2": "Welcome back. Luma online. Your quests are waiting.",
+  "hello_again_3": "Systems restored. Welcome back. Shall we continue?",
+  "hello_again_4": "Good evening. Welcome back. One small step is plenty tonight.",
+  "hello_again_5": "Welcome back. The hour is late. Rest counts as progress too.",
+  "hello_again_6": "Welcome back. It has been a few days. We begin again from here."
+}

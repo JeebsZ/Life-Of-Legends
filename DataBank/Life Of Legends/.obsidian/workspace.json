@@ -1,0 +1,251 @@
+{
+  "main": {
+    "id": "d89ff0c85c54d329",
+    "type": "split",
+    "children": [
+      {
+        "id": "7d6be962159dd3c9",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "05886472f1bcd042",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Design/expanded-feature-design.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "expanded-feature-design"
+            }
+          },
+          {
+            "id": "895bad552b7453e6",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "file:C:/GAMEDEV/RuinRush(Game)/2026-11-04/i-x20/outputs/LifeQuest_Expanded_Feature_Design.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "LifeQuest_Expanded_Feature_Design"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "3dc65503c41f4ce3",
+    "type": "split",
+    "children": [
+      {
+        "id": "e4d5d9ed2169e104",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "86f20631aec2e482",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "c6f262d52c6f924e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "23c2c19a95062b01",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "23a0d50582e6657f",
+    "type": "split",
+    "children": [
+      {
+        "id": "1aeaf064cf7180b0",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "521f8ef04fe64769",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Design/expanded-feature-design.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "ef4d9cb0c4644a06",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Design/expanded-feature-design.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "332c634189bbda23",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "598dd1bf89cb4abe",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "480cef7bec233ec5",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Design/expanded-feature-design.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "895bad552b7453e6",
+  "lastOpenFiles": [
+    "Changelog/2026-11-05-center-nav-slot.md",
+    "Design/chatgpt-2026-11-05-planning.md",
+    "Design/onboarding-personalize.md",
+    "Design/paywall-setup-guide.md",
+    "Design/roadmap-batches.md",
+    "Design/v1.5-memo.md",
+    "Changelog/2026-11-05-run-tracker.md",
+    "Changelog/2026-11-05-rose-arcana-theme.md",
+    "Design/v1.4-memo.md",
+    "Design/body-meals-memo.md",
+    "Changelog/2026-11-04-icosphere-impact-staged-lumen.md",
+    "Design/achievements.md",
+    "Design/ui-system.md",
+    "Design/v1.3-memo.md",
+    "Design/content-sources.md",
+    "Design/meal-scan-on-device.md",
+    "Changelog/2026-11-04-audio-focus-scifi-sfx.md",
+    "Changelog/2026-11-04-v1.3.md",
+    "Design/notifications.md",
+    "Design/notifications.md.tmp.10144.d7bd1e164b3c",
+    "Design/v1.3-spec.md",
+    "Design/v1.2-memo.md",
+    "Changelog/2026-11-04-v1.2-integration.md",
+    "Changelog/2026-11-04-v1.2-integration.md.tmp.10144.11e67d9ac424",
+    "Design/achievements.md.tmp.10144.1beaade11514",
+    "Design/v1.2-spec.md",
+    "Design/expanded-feature-design.md",
+    "Design/refs/6-timed.png",
+    "Design/refs/5-skill-links.png",
+    "Design/refs/4-identifying.webp",
+    "Design/refs/3-lumen-thinking.webp",
+    "Design/refs/2-milestone.webp",
+    "Design/refs/1-notice.png",
+    "Design/refs",
+    "file:C:/GAMEDEV/RuinRush(Game)/2026-11-04/i-x20/outputs/LifeQuest_Expanded_Feature_Design.md",
+    "Changelog/2026-11-04-lumen-voice-arcane.md",
+    "Design/sedNwdL6O",
+    "Design/sedX0b42H",
+    "Changelog/2026-11-04-lumen-voice-arcane.md.tmp.10144.5e39da159133",
+    "Design",
+    "Changelog",
+    "Context"
+  ]
+}

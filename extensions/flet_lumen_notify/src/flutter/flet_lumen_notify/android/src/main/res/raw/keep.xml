@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The notification sounds are looked up by name at runtime (RawResourceAndroidNotificationSound),
+     so resource shrinking must not strip them. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/notify_01,@raw/notify_02,@raw/notify_03,@raw/notify_04,@raw/notify_05,@raw/notify_06,@raw/notify_07,@raw/notify_08" />

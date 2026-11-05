@@ -1,0 +1,58 @@
+// Android side of the flet_lumen_notify Flutter plugin.
+//
+// It carries no real code: it exists so its AndroidManifest.xml (the
+// flutter_local_notifications receivers + RECEIVE_BOOT_COMPLETED) is merged
+// into the app, because `flet build` has no setting for manifest receivers.
+group 'com.jarvin.flet_lumen_notify'
+version '1.0'
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'com.jarvin.flet_lumen_notify'
+    compileSdk 36
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        minSdkVersion 24
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Core library desugaring workaround.
+//
+// flutter_local_notifications enables `coreLibraryDesugaringEnabled` in its own
+// module, and AGP's checkAarMetadata then fails the build unless the *app*
+// module enables desugaring too ("Dependency ':flutter_local_notifications'
+// requires core library desugaring to be enabled for :app"). `flet build`
+// generates android/app/build.gradle.kts from its template and has no setting
+// for that, and by the time this script runs :app is already configured (the
+// root build makes every plugin `evaluationDependsOn(":app")`).
+//
+// Desugaring only back-ports java.time & co. to Android < 8.0 (API 26). The app
+// sets minSdk 26 ([tool.flet.android] min_sdk_version in pyproject.toml), where
+// java.time is part of the OS, so instead we switch desugaring off in the
+// flutter_local_notifications module. Gradle configures sibling projects in
+// path order, and ':flet_lumen_notify' sorts before
+// ':flutter_local_notifications', so this hook is registered before that
+// module's own afterEvaluate (where AGP finalizes its DSL) and runs first.
+// ---------------------------------------------------------------------------
+def fln = rootProject.findProject(':flutter_local_notifications')
+if (fln != null) {
+    def disableDesugaring = { p ->
+        if (p.hasProperty('android')) {
+            p.android.compileOptions.coreLibraryDesugaringEnabled = false
+            p.logger.lifecycle("flet_lumen_notify: core library desugaring disabled for ${p.path} (app minSdk >= 26)")
+        }
+    }
+    if (fln.state.executed) {
+        logger.warn("flet_lumen_notify: ${fln.path} was configured before this module; " +
+                "could not disable its core library desugaring")
+    } else {
+        fln.afterEvaluate(disableDesugaring)
+    }
+}

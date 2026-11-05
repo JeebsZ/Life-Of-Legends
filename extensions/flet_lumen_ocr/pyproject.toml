@@ -1,0 +1,20 @@
+[project]
+name = "flet-lumen-ocr"
+version = "0.1.0"
+description = "Life of Legends on-device text recognition (notes scan): a Flet extension wrapping google_mlkit_text_recognition."
+requires-python = ">=3.10"
+dependencies = ["flet>=1.0.5,<2"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["flet_lumen_ocr*", "flutter*"]
+
+# Ship the Flutter package (Dart code) inside the wheel as `flutter/flet_lumen_ocr/...`.
+# `flet build` (serious_python) copies every site-packages `flutter/<name>/` folder that has a
+# pubspec.yaml into build/flutter-packages and adds it as a path dependency of the app.
+[tool.setuptools.package-data]
+"flutter.flet_lumen_ocr" = ["**/*"]

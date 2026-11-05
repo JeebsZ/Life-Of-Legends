@@ -1,0 +1,20 @@
+name: flet_lumen_ocr
+description: Life of Legends on-device text recognition (Flet extension wrapping google_mlkit_text_recognition).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+  flutter: ">=3.38.1"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Google ML Kit text recognition v2, on-device. Only the Latin script is used (and should
+  # be the only bundled model; see README "Size" for how to verify / trim on Android).
+  google_mlkit_text_recognition: ^0.15.0
+
+  # The app's generated pubspec pins `flet` via dependency_overrides, so this
+  # constraint only has to be compatible with it.
+  flet: ">=1.0.5 <2.0.0"
