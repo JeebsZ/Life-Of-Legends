@@ -1231,8 +1231,7 @@ class NavTab(ft.Container):
             width=38, height=3, border_radius=1.5, bgcolor=C.PRIMARY,
             shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=C.a(C.PRIMARY, 0.8)),
             opacity=0, animate_opacity=Motion.anim(Motion.FADE_MS))
-        self.glyph = ft.Icon(icon, size=23, color=C.TEXT_DIM,
-                             animate_color=Motion.anim(Motion.FADE_MS))
+        self.glyph = ft.Icon(icon, size=23, color=C.TEXT_DIM)
         self.caption = ft.Text(th.tr(label), size=Type.CAPTION - 0.5, color=C.TEXT_DIM,
                                weight=ft.FontWeight.W_500, max_lines=1)
         super().__init__(
@@ -1317,6 +1316,7 @@ class ArcaneSlot(ft.Container):
 
     def _paint(self) -> None:
         col, on = self.color, self.active
+        hex_col = col if isinstance(col, str) and col.startswith("#") else th.current().primary
         self.halo.shadow = [
             ft.BoxShadow(blur_radius=22, spread_radius=2, color=C.a(col, 0.85 if on else 0.65)),
             ft.BoxShadow(blur_radius=44, spread_radius=4, color=C.a(col, 0.40 if on else 0.22)),
@@ -1325,7 +1325,7 @@ class ArcaneSlot(ft.Container):
         # 3D spherical gradient with specular highlight on top-left
         self.core.gradient = ft.RadialGradient(
             center=ft.Alignment(-0.35, -0.45), radius=0.9,
-            colors=[C.a("#FFFFFF", 0.95), C.a(col, 0.95), ambient.mix(col, "#0284C7", 0.6), "#0369A1"],
+            colors=[C.a("#FFFFFF", 0.95), C.a(col, 0.95), ambient.mix(hex_col, "#0284C7", 0.6), "#0369A1"],
             stops=[0, 0.35, 0.75, 1],
         )
         self.core.border = ft.Border.all(1.5, C.a("#FFFFFF", 0.75 if on else 0.55))

@@ -20,6 +20,8 @@ org = "com.companions"
 product = "LUMA: Your Lifestyle QoL"
 company = "Companions"
 bundle_id = "com.companions.LUMA"
+build_number = 5
+build_version = "0.1.2"
 
 [tool.flet.app]
 path = "src"
@@ -79,8 +81,6 @@ flet-lumen-ocr = "extensions/flet_lumen_ocr"
 "android.permission.FOREGROUND_SERVICE" = true
 "android.permission.FOREGROUND_SERVICE_LOCATION" = true
 "android.permission.WAKE_LOCK" = true
-# Google Play In-App Purchases & Subscriptions (BILLING permission)
-"com.android.vending.BILLING" = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
