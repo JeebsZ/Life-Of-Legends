@@ -275,6 +275,22 @@ async def cancel_all() -> bool:
         return False
 
 
+async def post_run_alert(
+    title: str = "LUMA · Great Sage",
+    body: str = "",
+    key: str = "run_adventure_alert",
+) -> bool:
+    """Post an immediate background Run/Adventure notification if notification permission is
+    already granted (never prompts mid-run; safe no-op on PC/web/iOS)."""
+    if not body or not await permission_granted():
+        return False
+    try:
+        return bool(await _svc.show(stable_id(key), title, body, sound=sound()))
+    except Exception:
+        log.debug("run alert notification failed", exc_info=True)
+        return False
+
+
 async def test_now(title: str = "Luma", body: str = "Notifications are working!") -> bool:
     """Show a notification immediately (asks for permission first). True if it was posted."""
     if not await ensure_permission():

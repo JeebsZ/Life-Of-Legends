@@ -17,6 +17,7 @@ import asyncio
 import contextlib
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import flet as ft
@@ -32,6 +33,10 @@ from lol.core.adventure import (
 from lol.ui.theme import C
 
 CREATURE_DIR = "/creatures/"  # src/assets/creatures/<sprite>
+RUN_MAP_DIR = "/run_map/"  # src/assets/run_map/<asset>
+MAGIC_SENSE_ICON = "/run_map/magic_sense_ring.jpg"
+SPAWN_RIFT_ICON = "/run_map/spawn_rift_badge.jpg"
+PLAYER_SLIME_ICON = "/run_map/player_slime_core.jpg"
 SPRITE = 64
 BOSS_SPRITE = 88
 BAR_H = 6
@@ -49,11 +54,24 @@ BADGE_BG = "#111827"
 TARGET_BG = "#0B1320"
 GOLD = "#FACC15"
 CYAN = "#22D3EE"
+ARCANE_CYAN = "#4FE3F0"
 TIER_COLOR = {CreatureTier.NORMAL: "#38BDF8", CreatureTier.LEADER: "#F59E0B",
               CreatureTier.BOSS: "#A855F7"}
+MAP_TIER_RING = {CreatureTier.NORMAL: ARCANE_CYAN, CreatureTier.LEADER: GOLD,
+                 CreatureTier.BOSS: "#A855F7"}
 MODE_INFO = {TargetMode.LOWEST_HP: ("Lowest HP", ft.Icons.CENTER_FOCUS_STRONG_ROUNDED, "#38BDF8"),
              TargetMode.STRONGEST: ("Strongest", ft.Icons.WHATSHOT_ROUNDED, "#EC4899"),
              TargetMode.MANUAL: ("Locked", ft.Icons.LOCK_ROUNDED, GOLD)}
+
+
+@dataclass(frozen=True)
+class HitResult:
+    """Compact snapshot of the most recent hit on a creature for map marker juice."""
+
+    target_id: str | None = None
+    damage: float = 0.0
+    is_crit: bool = False
+    is_cleave: bool = False
 
 
 def hp_color(ratio: float) -> str:
@@ -62,6 +80,163 @@ def hp_color(ratio: float) -> str:
 
 def _anim(ms: int, curve: ft.AnimationCurve = ft.AnimationCurve.EASE_OUT) -> ft.Animation:
     return ft.Animation(ms, curve)
+
+
+def build_map_creature_marker(
+    creature: Creature,
+    *,
+    is_targeted: bool = False,
+    last_hit: HitResult | AdventureEvent | None = None,
+    on_tap: Callable[[str], None] | None = None,
+) -> ft.Control:
+    """Render a compact, non-distracting creature marker directly on the live GPS map canvas."""
+    if not creature.is_alive:
+        return ft.Container(
+            ft.Text("✦", size=14, weight=ft.FontWeight.W_900, color=ARCANE_CYAN),
+            width=36,
+            height=36,
+            border_radius=18,
+            bgcolor=C.a("#070B14", 0.65),
+            border=ft.Border.all(1, C.a(ARCANE_CYAN, 0.35)),
+            alignment=ft.Alignment.CENTER,
+            opacity=0.35,
+            scale=0.9,
+            animate_opacity=_anim(BURST_MS),
+            animate_scale=_anim(BURST_MS),
+            tooltip=f"{creature.name} (defeated)",
+        )
+
+    accent = MAP_TIER_RING.get(creature.tier, ARCANE_CYAN)
+    hit_id = getattr(last_hit, "target_id", None) if last_hit is not None else None
+    hit_dmg = float(getattr(last_hit, "damage", 0.0) or 0.0) if last_hit is not None else 0.0
+    is_hit = hit_id == creature.id and hit_dmg > 0
+    is_crit = is_hit and bool(getattr(last_hit, "is_crit", False))
+
+    boss = creature.tier == CreatureTier.BOSS
+    disc_size = 40 if boss else 34
+    ring_col = GOLD if (is_crit or is_targeted) else accent
+    ring_w = 2.5 if (is_targeted or boss or is_crit) else 1.8
+    scale = 1.14 if is_crit else (0.90 if is_hit else (1.06 if is_targeted else 1.0))
+
+    sprite_disc = ft.Container(
+        ft.Image(
+            src=CREATURE_DIR + creature.sprite,
+            width=disc_size - 6,
+            height=disc_size - 6,
+            fit=ft.BoxFit.CONTAIN,
+            error_content=ft.Icon(ft.Icons.PEST_CONTROL, color=accent, size=18),
+        ),
+        width=disc_size,
+        height=disc_size,
+        border_radius=disc_size / 2,
+        bgcolor=C.a("#EF4444", 0.45) if is_crit else (
+            C.a("#FFFFFF", 0.28) if is_hit else "#D90B1320"
+        ),
+        border=ft.Border.all(ring_w, ring_col),
+        shadow=ft.BoxShadow(
+            blur_radius=12 if (is_targeted or boss or is_crit) else 6,
+            color=C.a(ring_col, 0.65),
+        ),
+        alignment=ft.Alignment.CENTER,
+        animate=_anim(HIT_MS),
+    )
+
+    stack_items: list[ft.Control] = [sprite_disc]
+    if is_targeted:
+        stack_items.append(
+            ft.Container(
+                ft.Text("⌖", size=9, weight=ft.FontWeight.W_900, color="#070B14"),
+                width=14,
+                height=14,
+                border_radius=7,
+                bgcolor=GOLD,
+                alignment=ft.Alignment.CENTER,
+                top=-2,
+                right=-2,
+            )
+        )
+    elif boss:
+        stack_items.append(
+            ft.Container(
+                ft.Text("★", size=9, weight=ft.FontWeight.W_900, color="#070B14"),
+                width=14,
+                height=14,
+                border_radius=7,
+                bgcolor="#A855F7",
+                alignment=ft.Alignment.CENTER,
+                top=-2,
+                right=-2,
+            )
+        )
+    if is_hit and last_hit is not None and last_hit.damage > 0:
+        dmg_txt = f"-{last_hit.damage:.0f}" + (" CRIT!" if is_crit else "")
+        stack_items.append(
+            ft.Container(
+                ft.Text(
+                    dmg_txt,
+                    size=9 if is_crit else 8,
+                    weight=ft.FontWeight.W_900,
+                    color="#FEF08A" if is_crit else "#F8FAFC",
+                ),
+                bgcolor="#DDDC2626" if is_crit else "#CC0F172A",
+                border=ft.Border.all(1, GOLD if is_crit else ARCANE_CYAN),
+                border_radius=6,
+                padding=ft.Padding.symmetric(horizontal=4, vertical=1),
+                top=-14,
+                left=-6,
+            )
+        )
+
+    bar_w = 38
+    bar_h = 4
+    ratio = creature.hp_percent
+    hp_bar = ft.Container(
+        ft.Container(
+            width=max(2.0, bar_w * ratio),
+            height=bar_h,
+            bgcolor=hp_color(ratio),
+            border_radius=2,
+            animate=_anim(FILL_MS),
+        ),
+        width=bar_w,
+        height=bar_h,
+        bgcolor="#CC070B14",
+        border=ft.Border.all(0.5, "#444FE3F0"),
+        border_radius=2,
+    )
+    short_name = creature.name if len(creature.name) <= 11 else creature.name.split(" ")[-1]
+    name_lbl = ft.Text(
+        short_name + (" ★" if boss else ""),
+        size=8,
+        weight=ft.FontWeight.W_800,
+        color=GOLD if (boss or is_targeted) else "#E2E8F0",
+        max_lines=1,
+        overflow=ft.TextOverflow.ELLIPSIS,
+        text_align=ft.TextAlign.CENTER,
+    )
+
+    return ft.Container(
+        ft.Column(
+            [
+                ft.Stack(stack_items, width=disc_size, height=disc_size,
+                         clip_behavior=ft.ClipBehavior.NONE),
+                hp_bar,
+                name_lbl,
+            ],
+            spacing=2,
+            tight=True,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        width=52,
+        height=60,
+        alignment=ft.Alignment.CENTER,
+        scale=scale,
+        opacity=1.0,
+        animate_scale=_anim(HIT_MS, ft.AnimationCurve.EASE_OUT_BACK),
+        animate_opacity=_anim(BURST_MS),
+        on_click=(lambda _, cid=creature.id: on_tap(cid)) if on_tap is not None else None,
+        tooltip=f"{creature.name} ({round(creature.current_hp)}/{round(creature.max_hp)} HP)",
+    )
 
 
 def _upd(*controls: ft.Control) -> None:
@@ -220,12 +395,52 @@ class AdventureRunCard(ft.Container):
         self._cluster_id: str | None = None
         self._last_hit_sound = 0.0
         self._speed = 0.0
+        self.last_hit: HitResult | None = None
 
         self.padding = 14
         self.border_radius = 16
         self.bgcolor = BG
         self.border = ft.Border.all(1, BORDER)
 
+        self.sage_icon = ft.Image(
+            src=MAGIC_SENSE_ICON,
+            width=18,
+            height=18,
+            fit=ft.BoxFit.CONTAIN,
+            error_content=ft.Icon(ft.Icons.RADAR, size=14, color=ARCANE_CYAN),
+        )
+        self.sage_label = ft.Text(
+            "MAGIC SENSE",
+            size=10,
+            weight=ft.FontWeight.W_800,
+            color=ARCANE_CYAN,
+        )
+        self.sage_tag = ft.Container(
+            ft.Row(
+                [self.sage_icon, self.sage_label],
+                spacing=4,
+                tight=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            bgcolor=C.a(ARCANE_CYAN, 0.12),
+            border=ft.Border.all(1, C.a(ARCANE_CYAN, 0.45)),
+            border_radius=10,
+            padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+        )
+        self.surge_callout_text = ft.Text(
+            "⚡ GREAT SAGE · 1 KM SURGE",
+            size=10,
+            weight=ft.FontWeight.W_800,
+            color=GOLD,
+        )
+        self.surge_callout = ft.Container(
+            self.surge_callout_text,
+            bgcolor=C.a(GOLD, 0.16),
+            border=ft.Border.all(1, C.a(GOLD, 0.55)),
+            border_radius=10,
+            padding=ft.Padding.symmetric(horizontal=7, vertical=2),
+            visible=False,
+        )
         self.status_title = ft.Text("Scouting ahead…", size=14, weight=ft.FontWeight.W_700,
                                     color="#94A3B8", expand=True, no_wrap=True,
                                     overflow=ft.TextOverflow.ELLIPSIS)
@@ -257,7 +472,8 @@ class AdventureRunCard(ft.Container):
         self.pocket_btn = self._icon_btn(ft.Icons.PHONE_ANDROID_ROUNDED, "#94A3B8",
                                          "Pocket Mode: off", self._toggle_pocket)
         self.content = ft.Column(spacing=10, tight=True, controls=[
-            ft.Row([self.status_title, self.dps_badge], spacing=8),
+            ft.Row([self.sage_tag, self.status_title, self.surge_callout, self.dps_badge],
+                   spacing=6, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             self.banner,
             self.creatures_row,
             self.pocket_line,
@@ -353,6 +569,9 @@ class AdventureRunCard(ft.Container):
         cluster = eng.active_cluster
         if cluster is None or not cluster.has_alive:
             left = max(0.0, eng.next_spawn_distance_m - eng.total_distance_m)
+            self.sage_icon.src = MAGIC_SENSE_ICON
+            self.sage_label.value = "MAGIC SENSE"
+            self.sage_label.color = ARCANE_CYAN
             self.status_title.value = "Peaceful stride · scouting ahead"
             self.status_title.color = "#94A3B8"
             self.pocket_line.value = f"Next pack in ~{left:.0f} m"
@@ -364,6 +583,9 @@ class AdventureRunCard(ft.Container):
             return
         alive = cluster.alive_creatures
         boss = any(c.tier == CreatureTier.BOSS for c in alive)
+        self.sage_icon.src = SPAWN_RIFT_ICON
+        self.sage_label.value = "BOSS RIFT" if boss else "GREAT SAGE"
+        self.sage_label.color = "#A855F7" if boss else ARCANE_CYAN
         self.status_title.value = (f"BOSS ENCOUNTER · {len(alive)} left" if boss
                                    else f"Pack encounter · {len(alive)} left")
         self.status_title.color = "#E9D5FF" if boss else "#F8FAFC"
@@ -389,9 +611,22 @@ class AdventureRunCard(ft.Container):
         self._sync()
         self._safe_update()
 
+    def show_km_surge_callout(self, label: str = "⚡ GREAT SAGE · 1 KM SURGE") -> None:
+        """Show a non-intrusive Great Sage kilometer surge callout on the card header."""
+        self.surge_callout_text.value = label
+        self.surge_callout.visible = not self.pocket_mode
+        self._animate(self._hide_surge_callout_later)
+        self._safe_update()
+
+    async def _hide_surge_callout_later(self) -> None:
+        await asyncio.sleep(BANNER_S + 0.6)
+        self.surge_callout.visible = False
+        self._safe_update()
+
     # ------------------------------------------------------------------ events -> juice
     def process_tick_events(self, events: list[AdventureEvent]) -> None:
         """Sounds always; animations unless Pocket Mode. Never raises."""
+        self.last_hit = None
         for ev in events:
             with contextlib.suppress(Exception):
                 self._handle(ev)
@@ -407,6 +642,12 @@ class AdventureRunCard(ft.Container):
             b = self._badges.get(ev.target_id or "")
             cleave = t == EventType.MULTI_HIT
             if t == EventType.DAMAGE_DEALT:
+                self.last_hit = HitResult(
+                    target_id=ev.target_id,
+                    damage=ev.damage,
+                    is_crit=ev.is_crit,
+                    is_cleave=False,
+                )
                 if ev.is_crit:
                     self.combat_ticker.value = f"CRIT! {ev.target_name} -{ev.damage:.0f}"
                     self._sound("crit_hit.ogg")
@@ -415,6 +656,13 @@ class AdventureRunCard(ft.Container):
                     if now - self._last_hit_sound >= HIT_SOUND_GAP_S:
                         self._last_hit_sound = now
                         self._sound("hit.ogg")
+            elif self.last_hit is None and ev.damage > 0:
+                self.last_hit = HitResult(
+                    target_id=ev.target_id,
+                    damage=ev.damage,
+                    is_crit=ev.is_crit,
+                    is_cleave=True,
+                )
             if b is not None and not b.dying and ev.damage > 0:
                 self._animate(b.hit, ev.damage, ev.is_crit and not cleave, cleave)
         elif t == EventType.CREATURE_DEFEATED:
@@ -433,7 +681,9 @@ class AdventureRunCard(ft.Container):
             self.combat_ticker.value = ev.message
             self._sound("milestone_surge.ogg")
             km = int(ev.details.get("milestone_m", 0)) // 1000
-            self._animate(self._shockwave, f"⚡ {km}K SHOCKWAVE · -{ev.damage:.0f} AoE ⚡")
+            self.show_km_surge_callout("⚡ GREAT SAGE · 1 KM SURGE")
+            self._animate(self._shockwave,
+                          f"⚡ GREAT SAGE · 1 KM SURGE · {km}K SHOCKWAVE -{ev.damage:.0f} AoE ⚡")
         elif t == EventType.CLUSTER_CLEARED:
             self.combat_ticker.value = "Pack cleared! Keep moving to find the next one."
 

@@ -7,7 +7,8 @@ Both sources share one small interface used by screens/run.py:
                             "unavailable"
     start(on_fix) / stop()        (on_fix gets a core.run.Fix)
     now()                         (the clock the fixes use: time.time(), or the sim clock)
-Tracking only works while the app is open and on screen: no background service is started.
+Tracking continues in the background and while the screen is off via Android foreground
+notification service (`ForegroundNotificationConfiguration`) and iOS background location updates.
 """
 
 from __future__ import annotations
@@ -36,9 +37,10 @@ class FakeGps:
 
     fake = True
 
-    def __init__(self, page: Any) -> None:
+    def __init__(self, page: Any, speed: float | None = None) -> None:
         self.page = page
-        self.speed = max(0.1, float(os.getenv("LOL_FAKE_GPS_SPEED", "1") or 1))
+        default_speed = float(os.getenv("LOL_FAKE_GPS_SPEED", "1") or 1)
+        self.speed = max(0.1, float(speed) if speed is not None else default_speed)
         self.mode = "run"
         self._gen = 0
         self._wall0 = time.monotonic()

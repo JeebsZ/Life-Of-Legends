@@ -1200,16 +1200,16 @@ class PathProgress(ft.Container):
 
 NAV_TABS: tuple[tuple[str, ft.IconData, ft.IconData] | None, ...] = (
     # label, icon, selected icon; None = the center slot (ArcaneSlot)
-    ("Today", ft.Icons.WB_SUNNY_OUTLINED, ft.Icons.WB_SUNNY),
-    ("Quests", ft.Icons.FLAG_OUTLINED, ft.Icons.FLAG),
+    ("Today", ft.Icons.CALENDAR_TODAY_OUTLINED, ft.Icons.CALENDAR_TODAY),
+    ("Quests", ft.Icons.ASSIGNMENT_OUTLINED, ft.Icons.ASSIGNMENT),
     None,
-    ("Rewards", ft.Icons.REDEEM_OUTLINED, ft.Icons.REDEEM),
-    ("More", ft.Icons.GRID_VIEW, ft.Icons.GRID_VIEW_ROUNDED),
+    ("Rewards", ft.Icons.WORKSPACE_PREMIUM_OUTLINED, ft.Icons.WORKSPACE_PREMIUM),
+    ("More", ft.Icons.MORE_HORIZ_ROUNDED, ft.Icons.MORE_HORIZ_ROUNDED),
 )
 NAV_CENTER = 2
 NAV_H = 68  # bar height; the center orb rises SLOT_RISE above it
-SLOT_SIZE = 64
-SLOT_RISE = 28
+SLOT_SIZE = 56
+SLOT_RISE = 18
 SLOT_SPIN_S = 28  # one slow turn of the rune ring (one rotate update per turn: cheap)
 
 
@@ -1221,34 +1221,41 @@ def _dot(badge: str | bool | None) -> ft.Badge | str | None:
 
 
 class NavTab(ft.Container):
-    """One plain bottom-nav tab: icon in a pill indicator + label. Selected = filled glyph in
-    a primary-tinted pill."""
+    """One bottom-nav tab: active cyan indicator line at the top, modern outline icon, caption."""
 
     def __init__(self, label: str, icon: ft.IconData, selected_icon: ft.IconData, *,
                  on_click: Callback = None) -> None:
         self._raw_label = label
         self.glyphs = (icon, selected_icon)
-        self.glyph = ft.Icon(icon, size=24, color=C.TEXT_DIM)
-        self.pill = ft.Container(self.glyph, width=56, height=30, border_radius=Radius.PILL,
-                                 alignment=ft.Alignment.CENTER, bgcolor=ft.Colors.TRANSPARENT,
-                                 animate=Motion.anim(Motion.FADE_MS))
-        self.caption = ft.Text(th.tr(label), size=Type.CAPTION, color=C.TEXT_DIM,
+        self.indicator = ft.Container(
+            width=38, height=3, border_radius=1.5, bgcolor=C.PRIMARY,
+            shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=C.a(C.PRIMARY, 0.8)),
+            opacity=0, animate_opacity=Motion.anim(Motion.FADE_MS))
+        self.glyph = ft.Icon(icon, size=23, color=C.TEXT_DIM,
+                             animate_color=Motion.anim(Motion.FADE_MS))
+        self.caption = ft.Text(th.tr(label), size=Type.CAPTION - 0.5, color=C.TEXT_DIM,
                                weight=ft.FontWeight.W_500, max_lines=1)
         super().__init__(
-            content=ft.Column([self.pill, self.caption], spacing=4, tight=True,
-                              alignment=ft.MainAxisAlignment.CENTER,
-                              horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            expand=1, height=NAV_H, alignment=ft.Alignment.CENTER, on_click=on_click,
+            content=ft.Column([
+                self.indicator,
+                ft.Container(height=4),
+                self.glyph,
+                ft.Container(height=2),
+                self.caption,
+            ], spacing=0, tight=True, alignment=ft.MainAxisAlignment.START,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            expand=1, height=NAV_H, alignment=ft.Alignment.TOP_CENTER, on_click=on_click,
+            ink=True,
         )
 
     def refresh_label(self) -> None:
         self.caption.value = th.tr(self._raw_label)
 
     def set_selected(self, on: bool) -> None:
+        self.indicator.opacity = 1 if on else 0
         self.glyph.icon = self.glyphs[1] if on else self.glyphs[0]
         self.glyph.color = C.PRIMARY if on else C.TEXT_DIM
-        self.pill.bgcolor = C.a(C.PRIMARY, 0.18) if on else ft.Colors.TRANSPARENT
-        self.caption.color = C.TEXT if on else C.TEXT_DIM
+        self.caption.color = C.PRIMARY if on else C.TEXT_DIM
         self.caption.weight = ft.FontWeight.W_700 if on else ft.FontWeight.W_500
 
     def set_badge(self, badge: str | bool | None) -> None:
@@ -1258,25 +1265,22 @@ class NavTab(ft.Container):
 def _rune_ticks() -> list[ft.Control]:
     """16 static rune ticks around the ring; every 4th is a small diamond."""
     out: list[ft.Control] = []
-    r, mid = SLOT_SIZE / 2 - 3, SLOT_SIZE / 2
+    r, mid = SLOT_SIZE / 2 - 2, SLOT_SIZE / 2
     for n in range(16):
         a = 2 * math.pi * n / 16
         big = n % 4 == 0
-        w, h = (5, 5) if big else (2, 6)
+        w, h = (4, 4) if big else (2, 5)
         out.append(ft.Container(
             width=w, height=h, left=mid + r * math.sin(a) - w / 2,
             top=mid - r * math.cos(a) - h / 2, rotate=a + (math.pi / 4 if big else 0),
-            bgcolor=C.a(C.PRIMARY, 0.9 if big else 0.5), border_radius=1))
+            bgcolor=C.a(C.PRIMARY, 0.85 if big else 0.4), border_radius=1))
     return out
 
 
 class ArcaneSlot(ft.Container):
-    """The big center nav button: a raised glowing ring with a slowly turning rune ring and a
-    core disc. Empty: '+' and 'Pin'. Pinned: the feature's icon + color and a short label.
-    Active (its feature is on screen): brighter glow, bold label.
-
-    Cheap by design: the rune ring is static ticks turned by ONE `rotate` animation per
-    SLOT_SPIN_S (`spin()` loop); while `reduced()` it stays still."""
+    """The big center nav button: a glowing 3D spherical cyan orb with ambient radial backlight glow.
+    Empty: crisp white '+' glyph. Pinned: the feature's icon + color and a short label.
+    Active (its feature is on screen): brighter glow, bold label."""
 
     def __init__(self, *, on_click: Callback = None, on_long_press: Callback = None) -> None:
         self.color = C.PRIMARY
@@ -1284,8 +1288,8 @@ class ArcaneSlot(ft.Container):
         self.pinned = False
         self.angle = 0.0
         self.spinning = False
-        self.glyph = ft.Icon(ft.Icons.ADD, size=30, color=C.PRIMARY)
-        self.core = ft.Container(self.glyph, width=SLOT_SIZE - 16, height=SLOT_SIZE - 16,
+        self.glyph = ft.Icon(ft.Icons.ADD, size=28, color="#FFFFFF")
+        self.core = ft.Container(self.glyph, width=SLOT_SIZE - 6, height=SLOT_SIZE - 6,
                                  shape=ft.BoxShape.CIRCLE, alignment=ft.Alignment.CENTER)
         self.halo = ft.Container(width=SLOT_SIZE, height=SLOT_SIZE, shape=ft.BoxShape.CIRCLE,
                                  animate=Motion.anim(Motion.FADE_MS))
@@ -1300,11 +1304,11 @@ class ArcaneSlot(ft.Container):
                                    alignment=ft.Alignment.CENTER)],
                      width=SLOT_SIZE, height=SLOT_SIZE),
             top=-SLOT_RISE, scale=1, animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK))
-        self.caption = ft.Text("Pin", size=Type.CAPTION - 1, color=C.TEXT_DIM, max_lines=1,
+        self.caption = ft.Text("", size=Type.CAPTION - 2, color=C.TEXT_DIM, max_lines=1,
                                weight=ft.FontWeight.W_600, overflow=ft.TextOverflow.ELLIPSIS,
-                               text_align=ft.TextAlign.CENTER)
+                               text_align=ft.TextAlign.CENTER, visible=False)
         super().__init__(
-            content=ft.Stack([self.orb, ft.Container(self.caption, bottom=10)],
+            content=ft.Stack([self.orb, ft.Container(self.caption, bottom=6)],
                              alignment=ft.Alignment.TOP_CENTER,
                              clip_behavior=ft.ClipBehavior.NONE),
             expand=1, height=NAV_H, on_click=on_click, on_long_press=on_long_press,
@@ -1313,27 +1317,33 @@ class ArcaneSlot(ft.Container):
 
     def _paint(self) -> None:
         col, on = self.color, self.active
-        self.halo.border = ft.Border.all(2 if on else 1.5, C.a(col, 0.95 if on else 0.7))
-        self.halo.shadow = ft.BoxShadow(blur_radius=26 if on else 14,
-                                        spread_radius=1 if on else 0,
-                                        color=C.a(col, 0.7 if on else 0.35))
-        self.halo.bgcolor = C.SURFACE
+        self.halo.shadow = [
+            ft.BoxShadow(blur_radius=22, spread_radius=2, color=C.a(col, 0.85 if on else 0.65)),
+            ft.BoxShadow(blur_radius=44, spread_radius=4, color=C.a(col, 0.40 if on else 0.22)),
+        ]
+        self.halo.bgcolor = ft.Colors.TRANSPARENT
+        # 3D spherical gradient with specular highlight on top-left
         self.core.gradient = ft.RadialGradient(
-            colors=[C.a(col, 0.55 if on else 0.3), C.a(C.SURFACE_HI, 0.95)], radius=0.85)
-        self.core.border = ft.Border.all(1, C.a(col, 0.55))
-        self.glyph.color = C.TEXT if on and self.pinned else col
+            center=ft.Alignment(-0.35, -0.45), radius=0.9,
+            colors=[C.a("#FFFFFF", 0.95), C.a(col, 0.95), ambient.mix(col, "#0284C7", 0.6), "#0369A1"],
+            stops=[0, 0.35, 0.75, 1],
+        )
+        self.core.border = ft.Border.all(1.5, C.a("#FFFFFF", 0.75 if on else 0.55))
+        self.glyph.color = "#FFFFFF"
         self.caption.color = col if on else (C.TEXT if self.pinned else C.TEXT_DIM)
         self.caption.weight = ft.FontWeight.W_800 if on else ft.FontWeight.W_600
-        self.ring.opacity = 1 if self.pinned else 0.6
+        self.caption.visible = self.pinned
+        self.ring.opacity = 0.8 if on else (0.6 if self.pinned else 0.35)
 
     def set_pin(self, label: str | None, icon: ft.IconData | None = None,
                 color: str | None = None) -> None:
-        """label None -> empty slot ('+', 'Pin')."""
+        """label None -> empty slot ('+', no clutter)."""
         self.pinned = label is not None
         self.glyph.icon = icon if self.pinned and icon else ft.Icons.ADD
-        self.glyph.size = 26 if self.pinned else 30
+        self.glyph.size = 24 if self.pinned else 28
         self.color = color if self.pinned and color else C.PRIMARY
-        self.caption.value = th.tr(label) if self.pinned and label else th.tr("Pin")
+        self.caption.value = th.tr(label) if self.pinned and label else ""
+        self.caption.visible = self.pinned
         self._paint()
         refresh(self)
 
@@ -1393,10 +1403,18 @@ class ArcaneNavBar(ft.BottomAppBar):
             row.append(tab)
         self.selected_index = selected
         super().__init__(
-            content=ft.Row(row, spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            content=ft.Container(
+                ft.Row(row, spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                border=ft.Border(top=ft.BorderSide(1, C.a(C.PRIMARY, 0.22))),
+                height=NAV_H,
+            ),
             bgcolor=C.a(C.SURFACE, 0.94), padding=ft.Padding.symmetric(horizontal=4),
             height=NAV_H, elevation=0, clip_behavior=ft.ClipBehavior.NONE,
+            border_radius=ft.BorderRadius(top_left=22, top_right=22, bottom_left=0, bottom_right=0),
         )
+        for n, b in (badges or {}).items():
+            self.set_badge(n, b)
+        self.select(selected)
         for n, b in (badges or {}).items():
             self.set_badge(n, b)
         self.select(selected)

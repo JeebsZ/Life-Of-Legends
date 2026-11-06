@@ -186,8 +186,12 @@ class MoreScreen:
             top.prepare(**self.pending)
         self.pending = {}
         top.render()
-        return ft.Column([common.back_bar(top.title, self.back,
-                                          trailing=getattr(top, "trailing", None)),
+        is_full = bool(getattr(top, "fullscreen", False))
+        self.sub_header = ft.Container(
+            common.back_bar(top.title, self.back, trailing=getattr(top, "trailing", None)),
+            visible=not is_full,
+        )
+        return ft.Column([self.sub_header,
                           ft.Container(top.view, expand=True)], spacing=0, expand=True)
 
     def open(self, key: str, **kw: object) -> None:
@@ -207,6 +211,7 @@ class MoreScreen:
     def back(self) -> None:
         if not self.stack:
             return
+        self.app.set_fullscreen(False)
         sfx.play("back")
         top = self._top()
         getattr(top, "on_leave", lambda: None)()

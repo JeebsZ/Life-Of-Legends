@@ -52,7 +52,7 @@ Export reminders as an **.ics calendar file** and import it into the phone's cal
 gives exact, server-free alerts on any device, including iOS. It's not built yet.
 
 ## Phone test checklist
-1. Install `build/apk/lifeoflegends-arm64-v8a.apk`.
+1. Install `build/apk/luma-arm64-v8a.apk` (bundle ID `com.companions.LUMA`).
 2. Trigger `notify.test_now()`, for example from a Settings button. Allow the prompt. A
    "Luma" notification should appear.
 3. Trigger `notify.test_in(60)`, then lock the phone. The notification should arrive within a

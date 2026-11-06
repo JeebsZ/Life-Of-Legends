@@ -470,9 +470,22 @@ class App:
         sfx.play("tab_close" if self.tab == TAB_MORE and index != TAB_MORE else "tab_open")
         self._show(index)
 
+    def set_fullscreen(self, active: bool) -> None:
+        """Hide or restore the sub-screen '<- Run' title bar so the live Run map fills the
+        entire body area while keeping the top XP/Level header, bottom nav, and MindSpace
+        flowing background visible."""
+        for idx in (TAB_MORE, TAB_CENTER):
+            scr = self.screens[idx]
+            sub_hdr = getattr(scr, "sub_header", None)
+            if sub_hdr is not None:
+                sub_hdr.visible = not active
+        with contextlib.suppress(Exception):
+            self.page.update()
+
     def _show(self, index: int) -> None:
         self.nav.select(index)  # the highlight always follows the shown screen
         if self.tab != index:
+            self.set_fullscreen(False)
             leave = getattr(self.screens[self.tab], "on_leave", None)
             if leave:
                 leave()

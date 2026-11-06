@@ -118,7 +118,7 @@ def tones(pal: th.Palette | None = None) -> Tones:
             nebula=(("#1FA9B8", 0.52), ("#A78BFA", 0.40), (pal.primary, 0.28),
                     ("#2456A8", 0.60), (pal.success, 0.20)),
             bokeh=(pal.primary, "#A78BFA", pal.success),
-            motes=(pal.primary, "#CFF8FF", WHITE, pal.success, "#B9A6FF"),
+            motes=(pal.primary, "#CFF8FF", WHITE, "#F5C66B", "#B9A6FF", "#4FE3F0"),
             stars=(WHITE, "#CFF8FF", "#9FD8FF"),
             lines=pal.primary, vignette="#020409", strength=1.0)
     deep = mix(pal.bg, pal.primary, 0.35)
@@ -609,10 +609,10 @@ def glass_style(quality: str = "frost", *, tint: str | None = None, sigma: float
                              colors=[a(sheen, ops[0]), a(pal.surface, ops[1]),
                                      a(pal.bg, ops[2])], stops=[0, 0.55, 1])
     if pal.glow:
-        border = ft.Border.all(1, a(hue, 0.22))
-        shadow = [ft.BoxShadow(blur_radius=22, color=a(hue, 0.09) if glow else a(hue, 0)),
+        border = ft.Border.all(1.2, a(hue, 0.28))
+        shadow = [ft.BoxShadow(blur_radius=22, color=a(hue, 0.12) if glow else a(hue, 0)),
                   ft.BoxShadow(blur_radius=18, offset=ft.Offset(0, 8),
-                               color=a("#000000", 0.28))]
+                               color=a("#000000", 0.32))]
     else:
         border = ft.Border.all(1, a(pal.text, 0.09))
         shadow = [ft.BoxShadow(blur_radius=16, offset=ft.Offset(0, 6), color=a("#000000", 0.25))]

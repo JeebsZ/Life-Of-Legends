@@ -681,14 +681,29 @@ class NoticeEmblem(_Overlay):
                                 style=ft.TextStyle(letter_spacing=3.2))
         self._title = ft.Text("", weight=ft.FontWeight.W_900, color=WHITE, width=146,
                               text_align=ft.TextAlign.CENTER, max_lines=3)
-        self._sub = ft.Text("", size=11, color="#B9D8E6", text_align=ft.TextAlign.CENTER,
+        self._stars_row = ft.Row(
+            [ft.Icon(ft.Icons.STAR, size=13, color="#F5C66B") for _ in range(3)],
+            spacing=2, tight=True, alignment=ft.MainAxisAlignment.CENTER,
+        )
+        self._sub = ft.Text("", size=10.5, color="#B9D8E6", text_align=ft.TextAlign.CENTER,
                             width=150, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._rule = ft.Container(width=46, height=1)
         self._chroma = _Chroma(self._title)
+        self._claim_btn = ft.Container(
+            ft.Row([
+                ft.Icon(ft.Icons.CHECK, size=11, color="#070B14"),
+                ft.Text("EQUIP", size=8.5, weight=ft.FontWeight.W_900, color="#070B14"),
+            ], spacing=3, tight=True, alignment=ft.MainAxisAlignment.CENTER),
+            bgcolor=CYAN, border_radius=999,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=3),
+            border=ft.Border.all(1, WHITE),
+            shadow=ft.BoxShadow(blur_radius=8, color=a(CYAN, 0.6)),
+            on_click=lambda _: self._skip.set(),
+        )
         self._content = _place(ft.Container(
-            ft.Column([self._eyebrow, self._rule, self._chroma.wrap, self._sub], tight=True,
-                      spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            width=200, height=190, alignment=ft.Alignment.CENTER, opacity=0,
+            ft.Column([self._eyebrow, self._rule, self._chroma.wrap, self._stars_row, self._sub, self._claim_btn],
+                      tight=True, spacing=3, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            width=200, height=200, alignment=ft.Alignment.CENTER, opacity=0,
             offset=ft.Offset(0, 0.1), animate_opacity=_anim(420),
             animate_offset=_anim(500, CUBIC)), cx, cy + 4)
         self._side = ft.Text("", size=7.5, weight=ft.FontWeight.BOLD, no_wrap=True,
@@ -701,14 +716,15 @@ class NoticeEmblem(_Overlay):
         self._bloom_top = _place(_bloom(300), cx, top_y)
         self._sparks = _place(Sparks(420, 30, (WHITE, CYAN, "#9FF6FF"), seed=5,
                                      reach=(70, 210), dot=(2.5, 11), lift=10), cx, top_y)
-        self._motes = _place(Sparks(380, 18, (CYAN, "#9FF6FF", MINT), seed=8, mode="rise",
+        self._motes = _place(Sparks(380, 22, (CYAN, "#9FF6FF", MINT, "#F5C66B"), seed=8, mode="rise",
                                     reach=(90, 220), dot=(3, 14), ms=(2200, 3200)), cx, cy + 30)
+        self._magic_circle = _place(self._make_magic_circle(280, CYAN), cx, cy)
         # the crystal: charges at the centre, then rises to crown the emblem on impact
         self._ico = _place(Icosphere(self.ICO, freq=2, facets=True, seed=3), cx, cy)
         self._ico.animate_position = _anim(460, CUBIC)  # positioned in the stage Stack
         self._ico_home = (self._ico.left, self._ico.top)
         self._ico_crown = (cx - self.ICO / 2, top_y - self.ICO / 2)
-        self._stage.controls = [self._stars, *self._blobs, self._bloom_top, self._rays,
+        self._stage.controls = [self._stars, *self._blobs, self._magic_circle, self._bloom_top, self._rays,
                                 self._motes, self._bloom, self._line, self._line_up, self._halo,
                                 self._outer, self._inner, *self._marks, self._side_box,
                                 self._content, self._ico, self._sparks, self._flare]
@@ -721,6 +737,22 @@ class NoticeEmblem(_Overlay):
         return ft.Container(width=side, height=side, rotate=math.pi / 4, scale=0.55, opacity=0,
                             animate_rotation=_anim(720, CUBIC), animate_scale=_anim(620, BACK),
                             animate_opacity=_anim(300))
+
+    @staticmethod
+    def _make_magic_circle(size: float, col: str) -> ft.Container:
+        s = int(size)
+        c = s / 2
+        shapes: list[cv.Shape] = [
+            cv.Circle(c, c, c - 2, paint=_stroke(a(col, 0.45), 1.2)),
+            cv.Circle(c, c, c - 14, paint=_stroke(a(col, 0.25), 0.8)),
+            cv.Path(_ticks(c, c, c - 13, c - 3, 24), paint=_stroke(a(col, 0.5), 1)),
+            cv.Circle(c, c, c - 28, paint=_stroke(a(col, 0.2), 0.8, dash=[4, 4])),
+        ]
+        return ft.Container(
+            cv.Canvas(shapes, width=s, height=s), width=s, height=s,
+            opacity=0, rotate=0, animate_opacity=_anim(400),
+            animate_rotation=_anim(2800, LINEAR),
+        )
 
     def _paint(self, col: str) -> None:
         self._outer.border = ft.Border.all(1.6, a(col, 0.95))
@@ -742,9 +774,10 @@ class NoticeEmblem(_Overlay):
         self._flare.set_color(col)
         _paint_bloom(self._bloom, col, 0.32)
         _paint_bloom(self._bloom_top, col, 0.45)
-        self._sparks.set_colors((WHITE, col, "#9FF6FF"))
-        self._motes.set_colors((col, "#9FF6FF", MINT))
+        self._sparks.set_colors((WHITE, col, "#9FF6FF", "#F5C66B"))
+        self._motes.set_colors((col, "#4FE3F0", "#A78BFA", "#F5C66B"))
         self._ico.set_color(col)
+        self._claim_btn.bgcolor = col
         self._eyebrow.color = col
         self._side.color = a(col, 0.85)
         self._rule.bgcolor = a(col, 0.7)
@@ -778,6 +811,7 @@ class NoticeEmblem(_Overlay):
                 m.opacity = 0
             self._content.opacity, self._content.offset = 0, ft.Offset(0, 0.1)
             self._flare.prime()
+            self._magic_circle.opacity, self._magic_circle.rotate = 0, 0
             for bl in (self._bloom, self._bloom_top):
                 bl.opacity, bl.scale = 0, 0.6
             self._sparks.prime()
@@ -794,6 +828,7 @@ class NoticeEmblem(_Overlay):
             for b in self._blobs:
                 b.opacity, b.scale = 0.7, 1.0
             self._bloom.opacity, self._bloom.scale = 0.55, 0.8
+            self._magic_circle.opacity, self._magic_circle.rotate = 0.55, math.pi / 2
             self._ico.appear(380, 1.0, energy=0.9)
             self._ico.start(5.0)
             _refresh(self)
@@ -810,6 +845,7 @@ class NoticeEmblem(_Overlay):
             self._rays.opacity, self._rays.rotate = 0.95, 0.07
             self._flare.burst(300, 1.15)
             self._bloom_top.opacity, self._bloom_top.scale = 1, 1.15
+            self._magic_circle.opacity, self._magic_circle.rotate = 0.9, math.pi
             self._sparks.burst()
             self._motes.rise()
             self._impact(0.85, col)
@@ -836,6 +872,7 @@ class NoticeEmblem(_Overlay):
             await self._wait(0.55)
             self._flare.fade()
             self._motes.fade((250, 400))
+            self._magic_circle.opacity = 0
             self._ico.vanish(300, 1.2)
             await self._close()
             self._ico.stop()

@@ -4,12 +4,12 @@ version = "0.1.0"
 description = "LUMA: Your Lifestyle QoL - gamify your life. Mobile-first, runs on PC too."
 requires-python = ">=3.12"
 dependencies = [
-    "flet>=1.0,<2",
-    "flet-camera>=1.0,<2",
-    "flet-audio>=1.0.5,<2",
-    "flet-permission-handler>=1.0.5,<2",
-    "flet-geolocator>=1.0.5,<2",
-    "flet-map>=1.0.5,<2",
+    "flet==1.0.5",
+    "flet-camera==1.0.5",
+    "flet-audio==1.0.5",
+    "flet-permission-handler==1.0.5",
+    "flet-geolocator==1.0.5",
+    "flet-map==1.0.5",
 ]
 
 [project.optional-dependencies]
@@ -79,6 +79,8 @@ flet-lumen-ocr = "extensions/flet_lumen_ocr"
 "android.permission.FOREGROUND_SERVICE" = true
 "android.permission.FOREGROUND_SERVICE_LOCATION" = true
 "android.permission.WAKE_LOCK" = true
+# Google Play In-App Purchases & Subscriptions (BILLING permission)
+"com.android.vending.BILLING" = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -40,8 +40,9 @@ class Space:
 
 class Radius:
     SM = 8
-    MD = 14  # cards, rows
-    LG = 20  # sheets, banners
+    MD = 18  # chunky cards, rows
+    LG = 26  # chunky sheets, banners, modals
+    XL = 32  # extra large ceremonial containers
     PILL = 999
 
 

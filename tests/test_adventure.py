@@ -1,19 +1,33 @@
 from __future__ import annotations
 
+import math
+import random
 import unittest
 from datetime import date
+from pathlib import Path
 
 from src.lol.core.adventure import (
     ADVENTURE_DAILY_COIN_CAP,
     CREATURES,
     FRAGMENT_CHANCE,
+    METERS_PER_DEG_LAT,
+    SPAWN_RING_MAX_M,
+    SPAWN_RING_MIN_M,
     AdventureEngine,
     Creature,
     CreatureTier,
     EventType,
     TargetMode,
+    creature_latlon,
+    is_km_milestone,
 )
 from src.lol.core.game import DAILY_COIN_CAP, Game
+from src.lol.ui.adventure_layer import (
+    ARCANE_CYAN,
+    GOLD,
+    HitResult,
+    build_map_creature_marker,
+)
 
 
 class TestAdventure(unittest.TestCase):
@@ -280,6 +294,166 @@ class TestAdventure(unittest.TestCase):
         self.assertEqual(granted_2, ADVENTURE_DAILY_COIN_CAP - 10)
         self.assertEqual(g.adventure_coins_remaining(today), 0)
         self.assertEqual(g.profile.coins, DAILY_COIN_CAP + ADVENTURE_DAILY_COIN_CAP)
+
+    def test_creature_latlon_conversion(self):
+        """creature_latlon(center, creature) accurately converts North/East meter offsets into (lat, lon)."""
+        center = (14.5826, 120.9787)
+        c = Creature(
+            id="c_offset",
+            name="Slime",
+            tier=CreatureTier.NORMAL,
+            archetype="slime",
+            max_hp=40.0,
+            current_hp=40.0,
+            xp_reward=10,
+            coin_reward=1,
+            offset_north_m=22.264,
+            offset_east_m=-18.5,
+        )
+        lat, lon = creature_latlon(center, c)
+        expected_lat = center[0] + 22.264 / METERS_PER_DEG_LAT
+        expected_lon = center[1] + (-18.5) / (
+            METERS_PER_DEG_LAT * max(0.2, math.cos(math.radians(center[0])))
+        )
+        self.assertAlmostEqual(lat, expected_lat, places=7)
+        self.assertAlmostEqual(lon, expected_lon, places=7)
+        self.assertGreater(lat, center[0])
+        self.assertLess(lon, center[1])
+
+        # High latitude clamping safety (near pole >= 80 deg)
+        polar_lat, polar_lon = creature_latlon((89.0, 0.0), c)
+        self.assertAlmostEqual(
+            polar_lon,
+            -18.5 / (METERS_PER_DEG_LAT * 0.2),
+            places=7,
+        )
+        self.assertGreater(polar_lat, 89.0)
+
+    def test_generate_cluster_assigns_non_zero_radar_ring_offsets_and_spreads_angles(self):
+        """AdventureEngine.generate_cluster assigns radar-ring offsets (16..34m) and spreads angles."""
+        engine = AdventureEngine(rng=random.Random(42))
+        cluster = engine.generate_cluster(distance_m=350.0, force_boss=True)
+        self.assertGreaterEqual(len(cluster.creatures), 4)
+
+        angles: list[float] = []
+        coords: set[tuple[float, float]] = set()
+        for c in cluster.creatures:
+            self.assertNotEqual((c.offset_north_m, c.offset_east_m), (0.0, 0.0))
+            radius = math.hypot(c.offset_north_m, c.offset_east_m)
+            # Allowing small rounding tolerance from round(..., 2)
+            self.assertGreaterEqual(radius, SPAWN_RING_MIN_M - 0.05)
+            self.assertLessEqual(radius, SPAWN_RING_MAX_M + 0.05)
+            coords.add((c.offset_north_m, c.offset_east_m))
+            angles.append(math.atan2(c.offset_east_m, c.offset_north_m))
+
+        # Every creature has a distinct (north, east) coordinate
+        self.assertEqual(len(coords), len(cluster.creatures))
+
+        # Check pairwise angular separation is non-trivial (creatures are spread around the ring)
+        for i in range(len(angles)):
+            for j in range(i + 1, len(angles)):
+                diff = abs((angles[i] - angles[j] + math.pi) % (2.0 * math.pi) - math.pi)
+                self.assertGreater(diff, 0.35)
+
+    def test_is_km_milestone_boundary_detection(self):
+        """is_km_milestone accurately detects 1000m boundary crossings and ignores sub-km steps."""
+        self.assertFalse(is_km_milestone(0.0, 0.0))
+        self.assertFalse(is_km_milestone(0.0, 999.9))
+        self.assertTrue(is_km_milestone(999.9, 1000.0))
+        self.assertTrue(is_km_milestone(950.0, 1025.0))
+        self.assertFalse(is_km_milestone(1000.0, 1999.9))
+        self.assertTrue(is_km_milestone(1999.9, 2000.0))
+        self.assertTrue(is_km_milestone(2990.0, 3010.0))
+        # Negative or backwards distance safety
+        self.assertFalse(is_km_milestone(-10.0, 500.0))
+        self.assertFalse(is_km_milestone(1200.0, 1100.0))
+
+    def test_build_map_creature_marker_alive_and_defeated(self):
+        """build_map_creature_marker builds alive markers (HP bar, tier ring, reticle, squish) and defeated markers."""
+        boss = Creature(
+            id="boss_1",
+            name="KingSlime",
+            tier=CreatureTier.BOSS,
+            archetype="slime",
+            max_hp=400.0,
+            current_hp=200.0,
+            xp_reward=200,
+            coin_reward=10,
+            sprite="KingSlime.png",
+        )
+        tapped: list[str] = []
+
+        # 1. Alive untargeted boss marker (has ★ badge, HP bar, 52x60 size)
+        m_alive = build_map_creature_marker(boss, is_targeted=False, on_tap=tapped.append)
+        self.assertEqual(m_alive.width, 52)
+        self.assertEqual(m_alive.height, 60)
+        self.assertEqual(m_alive.scale, 1.0)
+        self.assertEqual(m_alive.opacity, 1.0)
+        self.assertIsNotNone(m_alive.on_click)
+        m_alive.on_click(None)
+        self.assertEqual(tapped, ["boss_1"])
+
+        col = m_alive.content
+        stack, hp_bar = col.controls[0], col.controls[1]
+        self.assertEqual(len(stack.controls), 2)  # sprite_disc + ★ boss badge
+        self.assertEqual(stack.controls[1].content.value, "★")
+        self.assertAlmostEqual(hp_bar.content.width, 38 * 0.5)
+
+        # 2. Alive targeted marker with regular hit squish (scale 0.90, ⌖ reticle, GOLD ring)
+        hit = HitResult(target_id="boss_1", damage=35.0, is_crit=False)
+        m_hit = build_map_creature_marker(boss, is_targeted=True, last_hit=hit)
+        self.assertEqual(m_hit.scale, 0.90)
+        stack_hit = m_hit.content.controls[0]
+        self.assertEqual(stack_hit.controls[1].content.value, "⌖")
+        self.assertEqual(stack_hit.controls[0].border.top.color, GOLD)
+
+        # 3. Alive marker with crit pop (scale 1.14)
+        crit_hit = HitResult(target_id="boss_1", damage=75.0, is_crit=True)
+        m_crit = build_map_creature_marker(boss, is_targeted=False, last_hit=crit_hit)
+        self.assertEqual(m_crit.scale, 1.14)
+
+        # 4. Defeated marker (✦ faded badge, 36x36, opacity 0.35)
+        boss.take_damage(500.0)
+        self.assertFalse(boss.is_alive)
+        m_dead = build_map_creature_marker(boss)
+        self.assertEqual(m_dead.width, 36)
+        self.assertEqual(m_dead.height, 36)
+        self.assertEqual(m_dead.opacity, 0.35)
+        self.assertEqual(m_dead.scale, 0.9)
+        self.assertEqual(m_dead.content.value, "✦")
+        self.assertEqual(m_dead.content.color, ARCANE_CYAN)
+        self.assertIn("defeated", m_dead.tooltip)
+
+    def test_run_map_assets_exist(self):
+        """Verify the 3 map assets exist in src/assets/run_map/ (.jpg or .png)."""
+        repo_root = Path(__file__).resolve().parent.parent
+        run_map_dir = repo_root / "src" / "assets" / "run_map"
+        expected_stems = (
+            "player_slime_core",
+            "magic_sense_ring",
+            "spawn_rift_badge",
+        )
+        for stem in expected_stems:
+            candidates = [run_map_dir / f"{stem}.jpg", run_map_dir / f"{stem}.png"]
+            found = next((p for p in candidates if p.is_file() and p.stat().st_size > 0), None)
+            self.assertIsNotNone(found, f"Missing run_map asset for {stem} in {run_map_dir}")
+
+    def test_pokemon_go_style_random_and_km_spawns(self):
+        """Packs spawn at randomized distance intervals (180..380m), wild ambushes, or 1km boundaries."""
+        engine = AdventureEngine(rng=random.Random(7))
+        intervals = {engine.roll_spawn_interval() for _ in range(10)}
+        self.assertGreater(len(intervals), 3)
+        for iv in intervals:
+            self.assertGreaterEqual(iv, 180.0)
+            self.assertLessEqual(iv, 380.0)
+
+        # Crossing 1 km with no active cluster immediately spawns a fresh pack
+        engine.total_distance_m = 995.0
+        engine.last_spawn_distance_m = 950.0
+        engine.next_spawn_distance_m = 1300.0
+        evs = engine.update_tick(delta_seconds=1.0, speed_kmh=6.5, distance_increment_m=10.0)
+        self.assertTrue(any(e.event_type == EventType.SPAWN_CLUSTER for e in evs))
+        self.assertIsNotNone(engine.active_cluster)
 
 
 if __name__ == "__main__":

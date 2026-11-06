@@ -14,6 +14,7 @@ separate daily adventure coin cap (`ADVENTURE_DAILY_COIN_CAP`).
 
 from __future__ import annotations
 
+import math
 import random
 import uuid
 from dataclasses import dataclass, field
@@ -22,7 +23,14 @@ from typing import Any
 
 # --- Balance (tweak here) -------------------------------------------------------------------
 SPAWN_INTERVAL_M = 350.0
+SPAWN_INTERVAL_RANGE_M: tuple[float, float] = (180.0, 380.0)
+WILD_SPAWN_MIN_GAP_M: float = 95.0
+WILD_SPAWN_CHANCE_PER_100M: float = 0.42
+KM_MILESTONE_M: float = 1000.0
 MILESTONES_M: tuple[int, ...] = (1000, 3000, 5000, 10000)
+SPAWN_RING_MIN_M: float = 16.0
+SPAWN_RING_MAX_M: float = 34.0
+METERS_PER_DEG_LAT: float = 111_320.0
 BOSS_CHANCE = 0.20
 NORMAL_COUNT = (2, 3)  # inclusive range of NORMAL mobs per pack
 HP_SCALE_PER_KM = 0.15  # packs get +15% HP per km already covered
@@ -130,6 +138,8 @@ class Creature:
     coin_reward: int
     cosmetic_fragment_chance: float = 0.0
     sprite: str = ""
+    offset_north_m: float = 0.0
+    offset_east_m: float = 0.0
 
     @property
     def is_alive(self) -> bool:
@@ -148,6 +158,25 @@ class Creature:
         actual = min(self.current_hp, amount)
         self.current_hp = max(0.0, self.current_hp - amount)
         return actual
+
+
+def creature_latlon(
+    center: tuple[float, float],
+    creature: Creature,
+) -> tuple[float, float]:
+    """Convert cluster/player `(lat, lon)` + creature meter offsets into `(lat, lon)` degrees."""
+    center_lat, center_lon = center
+    d_lat = creature.offset_north_m / METERS_PER_DEG_LAT
+    meters_per_deg_lon = METERS_PER_DEG_LAT * max(0.2, math.cos(math.radians(center_lat)))
+    d_lon = creature.offset_east_m / meters_per_deg_lon
+    return (center_lat + d_lat, center_lon + d_lon)
+
+
+def is_km_milestone(prev_dist_m: float, new_dist_m: float) -> bool:
+    """Return True when cumulative distance crosses a new 1 km boundary."""
+    return int(max(0.0, new_dist_m) // KM_MILESTONE_M) > int(
+        max(0.0, prev_dist_m) // KM_MILESTONE_M
+    )
 
 
 @dataclass
@@ -199,6 +228,7 @@ class AdventureEngine:
         self.rng = rng or random.Random()
         self.active_cluster: EncounterCluster | None = None
         self.total_distance_m = 0.0
+        self.last_spawn_distance_m = 0.0
         self.next_spawn_distance_m = SPAWN_INTERVAL_M
         self.manual_target_id: str | None = None
         self.cleared_milestones: set[int] = set()
@@ -206,6 +236,10 @@ class AdventureEngine:
         self.total_coins_earned = 0
         self.creatures_defeated_count = 0
         self.cosmetic_fragments_count = 0
+
+    def roll_spawn_interval(self) -> float:
+        """Roll the next Pokémon GO-style random distance gap (180..380m) before a guaranteed pack."""
+        return round(self.rng.uniform(*SPAWN_INTERVAL_RANGE_M), 1)
 
     # ------------------------------------------------------------------ spawning
     def _make(self, d: CreatureDef, cluster_id: str, slot: str, hp_scale: float) -> Creature:
@@ -232,7 +266,16 @@ class AdventureEngine:
         creatures.append(self._make(r.choice(leaders), cluster_id, "leader", hp_scale))
         if force_boss or r.random() < self.boss_encounter_chance:
             creatures.append(self._make(r.choice(roster(_B)), cluster_id, "boss", hp_scale))
+        count = max(1, len(creatures))
+        base_heading = r.uniform(0.0, 2.0 * math.pi)
+        for idx, creature in enumerate(creatures):
+            angle = base_heading + (2.0 * math.pi * idx) / count + r.uniform(-0.24, 0.24)
+            radius = r.uniform(SPAWN_RING_MIN_M + 0.5, SPAWN_RING_MAX_M - 0.5)
+            creature.offset_north_m = round(radius * math.cos(angle), 2)
+            creature.offset_east_m = round(radius * math.sin(angle), 2)
         return EncounterCluster(cluster_id, distance_m, creatures)
+
+    spawn_cluster = generate_cluster
 
     # ------------------------------------------------------------------ combat math
     def calculate_dps(self, speed_kmh: float) -> tuple[float, bool]:
@@ -287,7 +330,10 @@ class AdventureEngine:
         events: list[AdventureEvent] = []
         delta_seconds = max(0.0, delta_seconds or 0.0)
         speed_kmh = max(0.0, speed_kmh or 0.0)
-        self.total_distance_m += max(0.0, distance_increment_m or 0.0)
+        prev_dist = self.total_distance_m
+        inc_m = max(0.0, distance_increment_m or 0.0)
+        self.total_distance_m += inc_m
+        crossed_km = is_km_milestone(prev_dist, self.total_distance_m)
 
         for m in self.MILESTONES_M:
             if m not in self.cleared_milestones and self.total_distance_m >= m:
@@ -295,19 +341,32 @@ class AdventureEngine:
                 events.extend(self.trigger_milestone_surge(m))
 
         cluster = self.active_cluster
-        if (cluster is None or cluster.is_cleared) and \
-                self.total_distance_m >= self.next_spawn_distance_m:
-            cluster = self.active_cluster = self.generate_cluster(self.total_distance_m)
-            self.manual_target_id = None
-            if self.target_mode == TargetMode.MANUAL:
-                self.target_mode = TargetMode.LOWEST_HP
-            self.next_spawn_distance_m = self.total_distance_m + SPAWN_INTERVAL_M
-            events.append(AdventureEvent(
-                EventType.SPAWN_CLUSTER,
-                ("A BOSS approaches!" if cluster.has_boss else "Encounter!")
-                + f" {len(cluster.creatures)} creatures ahead.",
-                details={"creature_count": len(cluster.creatures),
-                         "cluster_id": cluster.cluster_id, "has_boss": cluster.has_boss}))
+        if cluster is None or cluster.is_cleared:
+            dist_since_last = self.total_distance_m - self.last_spawn_distance_m
+            wild_ambush = (
+                speed_kmh >= STILL_KMH
+                and inc_m > 0.0
+                and dist_since_last >= WILD_SPAWN_MIN_GAP_M
+                and self.rng.random() < min(0.35, (inc_m / 100.0) * WILD_SPAWN_CHANCE_PER_100M)
+            )
+            if (
+                self.total_distance_m >= self.next_spawn_distance_m
+                or crossed_km
+                or wild_ambush
+            ):
+                cluster = self.active_cluster = self.generate_cluster(self.total_distance_m)
+                self.manual_target_id = None
+                if self.target_mode == TargetMode.MANUAL:
+                    self.target_mode = TargetMode.LOWEST_HP
+                self.last_spawn_distance_m = self.total_distance_m
+                self.next_spawn_distance_m = self.total_distance_m + self.roll_spawn_interval()
+                events.append(AdventureEvent(
+                    EventType.SPAWN_CLUSTER,
+                    ("A BOSS approaches!" if cluster.has_boss else "Wild encounter!")
+                    + f" {len(cluster.creatures)} creatures ahead.",
+                    details={"creature_count": len(cluster.creatures),
+                             "cluster_id": cluster.cluster_id, "has_boss": cluster.has_boss,
+                             "wild_ambush": wild_ambush}))
 
         if not cluster or not cluster.has_alive or delta_seconds <= 0:
             return events
