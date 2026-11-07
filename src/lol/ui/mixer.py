@@ -42,12 +42,13 @@ AUDIBLE: dict[str, float] = {
     "power_up": 1.06, "low_energy": 0.46, "low_health": 1.22, "loading": 0.98, "type": 0.02,
     "distort": 0.22, "scan_tick": 0.04, "scan_done": 0.30, "shutter": 0.06,
     "level_up": 1.48, "skill_acquired": 1.22, "milestone": 2.50, "lumen_hum": 2.08,
+    "text_blip_01": 0.08, "download_complete": 0.95,
 }
 # Sounds Luma's voice must not talk over (it waits until their audible part ends). Combo
 # layers count on their own: chain_complete holds the voice through mission_complete.
 FOREGROUND = frozenset({"quest_done", "quest_clear", "level_up", "skill_acquired", "milestone",
                         "lumen_hum", "alert_soft", "timer_done", "mission_complete", "rank_up",
-                        "purchase", "power_up"})
+                        "purchase", "power_up", "download_complete"})
 GAP_S = 0.15        # breath between the end of a reward sound and the voice
 MAX_WAIT_S = 2.2    # never hold the voice longer than this (it must still match the screen)
 DUCK = 0.35         # effects play at 35% while Luma speaks

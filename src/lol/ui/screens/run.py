@@ -32,15 +32,14 @@ from lol.core.adventure import (
     creature_latlon,
     is_km_milestone,
 )
-from lol.core.models import RunEntry
+from lol.core.models import AvatarCustomization, RunEntry
 from lol.core.run_cues import CUE_EVERY, CueCoach
 from lol.core.runlog import CHALLENGE_COINS, CHALLENGE_XP, MIN_LOG_M, PACE_BADGES, TIER_BY_ID
-from lol.ui import ads, audio, gps, notify, sfx
+from lol.ui import ads, audio, avatars, gps, notify, sfx
 from lol.ui import components as ui
 from lol.ui import theme as th
 from lol.ui.adventure_layer import (
     MAGIC_SENSE_ICON,
-    PLAYER_SLIME_ICON,
     SPAWN_RIFT_ICON,
     AdventureRunCard,
     build_map_creature_marker,
@@ -115,19 +114,23 @@ class _AdvStateProxy(dict):
             object.__setattr__(self, name, value)
 
 
-def _player_slime_beacon() -> ft.Container:
-    """Player Slime Core / Great Sage presence beacon marker (44x44) for the live map."""
+def _is_mounted(ctrl: ft.Control | None) -> bool:
+    if ctrl is None:
+        return False
+    try:
+        return ctrl.page is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _player_slime_beacon(custom: AvatarCustomization | None = None) -> ft.Container:
+    """Player chibi avatar / Great Sage presence beacon marker (44x44) for the live map."""
     return ft.Container(
-        ft.Image(
-            src=PLAYER_SLIME_ICON,
-            width=36,
-            height=36,
-            fit=ft.BoxFit.CONTAIN,
-            error_content=ft.Icon(ft.Icons.MY_LOCATION, size=20, color=ARCANE_CYAN),
-        ),
+        avatars.AvatarView(custom, size=38),
         width=44,
         height=44,
         border_radius=22,
+        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
         bgcolor="#D9070B14",
         border=ft.Border.all(2, ARCANE_CYAN),
         shadow=ft.BoxShadow(blur_radius=12, color="#884FE3F0"),
@@ -265,7 +268,7 @@ class RunScreen:
         if self._tile_layer is not None:
             self._tile_layer.url_template = self._tile_url_for_style()
         self._update_map()
-        if getattr(self.live_view, "page", None) is not None:
+        if _is_mounted(self.live_view):
             ui.refresh(self.live_view)
 
     def _toggle_hud_dock(self, _: Any = None) -> None:
@@ -273,7 +276,7 @@ class RunScreen:
         sfx.play("tap")
         self._hud_dock_collapsed = not self._hud_dock_collapsed
         self._sync_hud_layout()
-        if getattr(self.live_view, "page", None) is not None:
+        if _is_mounted(self.live_view):
             ui.refresh(self.live_view)
 
     def _toggle_hud_layout(self, _: Any = None) -> None:
@@ -282,7 +285,7 @@ class RunScreen:
         self._hud_layout = "go" if self._hud_layout == "dock" else "dock"
         self._sync_hud_layout()
         self._paint_live()
-        if getattr(self.live_view, "page", None) is not None:
+        if _is_mounted(self.live_view):
             ui.refresh(self.live_view)
 
     def _cycle_target_mode(self, _: Any = None) -> None:
@@ -294,13 +297,12 @@ class RunScreen:
             if eng.target_mode == TargetMode.LOWEST_HP
             else TargetMode.LOWEST_HP
         )
-        if self.adventure_card is not None:
+        eng.target_mode, eng.manual_target_id = new_mode, None
+        if self.adventure_card is not None and hasattr(self.adventure_card, "_on_select_mode"):
             self.adventure_card._on_select_mode(new_mode)
-        else:
-            eng.target_mode, eng.manual_target_id = new_mode, None
         self._paint_live()
         self._update_map()
-        if getattr(self.live_view, "page", None) is not None:
+        if _is_mounted(self.live_view):
             ui.refresh(self.live_view)
 
     def _sync_hud_layout(self) -> None:
@@ -347,12 +349,12 @@ class RunScreen:
             else:
                 eng.target_mode, eng.manual_target_id = TargetMode.MANUAL, creature_id
         self._update_map()
-        if getattr(self.live_view, "page", None) is not None:
+        if _is_mounted(self.live_view):
             ui.refresh(self.live_view)
 
     def _on_card_target_changed(self, _creature_id: str) -> None:
         self._update_map()
-        if getattr(self.live_view, "page", None) is not None:
+        if _is_mounted(self.live_view):
             ui.refresh(self.live_view)
 
     def _play_adventure_sound(self, sound_name: str) -> None:
@@ -372,7 +374,15 @@ class RunScreen:
         self.render()
         ui.refresh(self.view)
 
+    def _refresh_hud_avatars(self) -> None:
+        custom = self.app.game.profile.avatar_customization
+        for attr in ("hud_slime_avatar", "hud_go_avatar"):
+            ctrl = getattr(self, attr, None)
+            if ctrl is not None and isinstance(ctrl.content, avatars.AvatarView):
+                ctrl.content.set_custom(custom)
+
     def on_enter(self) -> None:
+        self._refresh_hud_avatars()
         if self.phase == "pre":
             self.app.page.run_task(self._check_gps)
 
@@ -385,6 +395,7 @@ class RunScreen:
         return self.app.game.data.run_settings
 
     def render(self) -> None:
+        self._refresh_hud_avatars()
         with contextlib.suppress(Exception):
             self.app.set_fullscreen(self.phase == "live")
         if self.phase == "live":
@@ -1055,14 +1066,9 @@ class RunScreen:
         )
 
         # Slime Core / Great Sage Level & Nearby Mobs Counter pill
+        custom = self.app.game.profile.avatar_customization
         self.hud_slime_avatar = ft.Container(
-            ft.Image(
-                src=PLAYER_SLIME_ICON,
-                width=22,
-                height=22,
-                fit=ft.BoxFit.COVER,
-                error_content=ft.Icon(ft.Icons.SHIELD_MOON, size=14, color=ARCANE_CYAN),
-            ),
+            avatars.AvatarView(custom, size=22),
             width=22,
             height=22,
             border_radius=11,
@@ -1111,24 +1117,17 @@ class RunScreen:
             weight=ft.FontWeight.W_800,
             color="#E2E8F0",
         )
+        self.hud_go_avatar = ft.Container(
+            avatars.AvatarView(custom, size=26),
+            width=26,
+            height=26,
+            border_radius=13,
+            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+        )
         self.hud_go_left_pill = ft.Container(
             ft.Row(
                 [
-                    ft.Container(
-                        ft.Image(
-                            src=PLAYER_SLIME_ICON,
-                            width=26,
-                            height=26,
-                            fit=ft.BoxFit.COVER,
-                            error_content=ft.Icon(
-                                ft.Icons.SHIELD_MOON, size=16, color=ARCANE_CYAN
-                            ),
-                        ),
-                        width=26,
-                        height=26,
-                        border_radius=13,
-                        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                    ),
+                    self.hud_go_avatar,
                     self.hud_go_left_text,
                 ],
                 spacing=6,
@@ -1561,7 +1560,7 @@ class RunScreen:
                     )
             marks.append(
                 fm.Marker(
-                    content=_player_slime_beacon(),
+                    content=_player_slime_beacon(self.app.game.profile.avatar_customization),
                     coordinates=fm.MapLatitudeLongitude(here[0], here[1]),
                     width=44,
                     height=44,
@@ -1574,7 +1573,7 @@ class RunScreen:
         if marker_layer is not None:
             marker_layer.markers = marks
 
-        if getattr(m, "page", None) is not None:
+        if _is_mounted(m):
             ui.refresh(m)
             if here and now - self._last_follow >= FOLLOW_EVERY_S:
                 self._last_follow = now
@@ -1649,10 +1648,10 @@ class RunScreen:
             center, [], live=True, height=LIVE_MAP_H)
         self.map_host.content = self.live_map or ft.Container(
             common.hint("Map unavailable"), alignment=ft.Alignment.CENTER)
-        self._update_map(now)
+        self._refresh()  # mount live_view & map into page first so they are mounted!
+        self._update_map(now)  # safe to update now that map is mounted
         self.gps.start(self._on_fix, s.mode)
         sfx.play("objective_new")
-        self._refresh()  # show the live screen first: the calls below may answer slowly
         self.app.page.run_task(self._tick, self.gen)
         if s.keep_awake and self.wake is not None:
             # web has no wakelock and never answers; never let it hold up the run
@@ -1682,7 +1681,7 @@ class RunScreen:
         if isinstance(self._adv_state, dict):
             self._adv_state["last_step"] = now
         # Only touch UI controls if live_view is currently mounted on screen
-        is_mounted = getattr(self.live_view, "page", None) is not None
+        is_mounted = _is_mounted(self.live_view)
         with contextlib.suppress(Exception):  # the adventure must never break a run
             self._adventure_tick(now, self._adv_state)
         if is_mounted:
@@ -1749,7 +1748,7 @@ class RunScreen:
                 f"Total: +{self.adventure_engine.total_xp_earned} XP, "
                 f"+{self.adventure_engine.total_coins_earned} coins."
             )
-        is_mounted = getattr(self.live_view, "page", None) is not None
+        is_mounted = _is_mounted(self.live_view)
         if bg_alert_msg and (not is_mounted or notify.available()):
             with contextlib.suppress(Exception):
                 self.app.page.run_task(

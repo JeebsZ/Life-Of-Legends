@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
-from lol.core import catalog, storage
+from lol.core import avatar_catalog, catalog, storage
 from lol.core.adventure import ADVENTURE_DAILY_COIN_CAP
 from lol.core.body import BodyMixin
 from lol.core.models import (
@@ -27,6 +27,7 @@ from lol.core.models import (
     WATER_UNITS,
     WEIGHT_UNITS,
     WORKOUT_TYPES,
+    AvatarCustomization,
     Bill,
     CatalogChain,
     CatalogQuest,
@@ -981,6 +982,8 @@ class Game(BodyMixin, RunMixin, StudyMixin, PremiumMixin):
         *,
         name: str | None = None,
         avatar_id: str | None = None,
+        avatar_customization: AvatarCustomization | None = None,
+        avatar_configured: bool | None = None,
         voice_on: bool | None = None,
         voice_volume: float | None = None,
         sfx_on: bool | None = None,
@@ -1001,6 +1004,10 @@ class Game(BodyMixin, RunMixin, StudyMixin, PremiumMixin):
             if not avatar_id.strip():
                 raise ValueError("avatar id is empty")
             p.avatar_id = avatar_id.strip()
+        if avatar_customization is not None:
+            p.avatar_customization = avatar_catalog.sanitize(avatar_customization)
+        if avatar_configured is not None:
+            p.avatar_configured = bool(avatar_configured)
         if voice_on is not None:
             p.voice_on = bool(voice_on)
         if voice_volume is not None:
@@ -1023,6 +1030,10 @@ class Game(BodyMixin, RunMixin, StudyMixin, PremiumMixin):
             if language not in LANGUAGES:
                 raise ValueError(f"unknown language {language!r}")
             p.language = language
+
+    def claim_avatar_bonus(self) -> int:
+        """Grant the one-time +200 coin reward for creating/customizing an avatar."""
+        return avatar_catalog.claim_avatar_bonus(self)
 
     def finish_onboarding(self, name: str, avatar_id: str) -> None:
         """Guest onboarding done: set name and avatar, never show onboarding again."""

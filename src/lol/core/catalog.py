@@ -406,7 +406,7 @@ _TEMPLATE_ROWS: tuple[_T, ...] = (
     ("t-skin-care", "Skin care routine", "Cleanse, then your usual products. Gentle is fine.",
      "monk", 1, "daily", 5),
     ("t-oral-care", "Oral care", "Brush for two minutes and floss.", "monk", 1, "daily", 5),
-    ("t-facial", "Do a facial", "A relaxing facial at home with products you already like.",
+    ("t-facial", "Face mask routine", "A relaxing face mask or skincare session at home with products you already like.",
      "monk", 1, "once", 20),
     ("t-stretch", "Stretching", "Gentle stretches only. Stop if anything hurts.",
      "monk", 1, "daily", 10),

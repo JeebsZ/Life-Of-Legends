@@ -28,6 +28,7 @@ from lol.ui import ambient, audio, avatars, notify, sfx, voice
 from lol.ui import components as ui
 from lol.ui import effects as fx
 from lol.ui import theme as th
+from lol.ui.cloud_sync import CloudSyncManager
 from lol.ui.screens import common
 from lol.ui.theme import C, Radius, Space, Type
 
@@ -156,7 +157,7 @@ class App:
         self.name = ft.Text(p.name, size=Type.HEADLINE, weight=ft.FontWeight.W_900,
                             color=C.TEXT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
                             expand=True)
-        self.avatar = avatars.bubble(p.avatar_id, 38)
+        self.avatar = avatars.bubble(p.avatar_id, 38, custom=p.avatar_customization)
         self.avatar.on_click = lambda e: self.open_sub("profile")
         self.avatar.tooltip = "Profile"
         self.header = ambient.apply_glass(ft.Container(
@@ -184,6 +185,7 @@ class App:
         self.nav = ui.ArcaneNavBar(TAB_TODAY, on_select=self._on_nav,
                                    on_center=self._center_tap, on_center_hold=self._center_hold)
         self._unpinned: str | None = None  # last unpinned feature (Undo)
+        self.cloud = CloudSyncManager(self)
 
     # ------------------------------------------------------------------ helpers
     def today(self) -> date:
@@ -192,6 +194,9 @@ class App:
     def save(self) -> None:
         self.game.save()
         self.resync_reminders()
+        if self.cloud.is_signed_in:
+            with contextlib.suppress(Exception):
+                self.page.run_task(self.cloud.sync)
 
     # ------------------------------------------------------------------ reminders
     def reminders(self) -> list:
@@ -313,7 +318,7 @@ class App:
         """Header avatar + name after a profile edit (pops the avatar)."""
         p = self.game.profile
         self.name.value = p.name
-        avatars.restyle_bubble(self.avatar, p.avatar_id)
+        avatars.restyle_bubble(self.avatar, p.avatar_id, custom=p.avatar_customization)
         ui.refresh(self.name, self.avatar)
         if self.avatar.page:
             self.page.run_task(ui.pop, self.avatar, 1.18)
@@ -629,7 +634,7 @@ class App:
         """After a restore: header, settings, theme, badges and the visible screen."""
         p = self.game.profile
         self.name.value = p.name
-        avatars.restyle_bubble(self.avatar, p.avatar_id)
+        avatars.restyle_bubble(self.avatar, p.avatar_id, custom=p.avatar_customization)
         self.xp_bar.set(p.xp / xp_for_level(p.level), caption=self._xp_caption(), level=p.level)
         self.coins.set(p.coins)
         self.apply_settings()
@@ -639,6 +644,8 @@ class App:
         self.update_badges()
         self.rerender()
         self.page.update()
+
+    apply_restore = reload_state
 
 
 def main(page: ft.Page) -> None:
@@ -651,6 +658,7 @@ def main(page: ft.Page) -> None:
     ui.use_haptics(ft.HapticFeedback())
 
     app = App(page)
+    app.cloud.init_page(page)
     audio.init(page, settings=lambda: app.game.profile)  # voice_on / voice_volume, read live
     sfx.init(page, settings=lambda: app.game.profile)  # sfx_on / sfx_volume / reduce_effects
     th.apply_theme(page, app.game.profile.theme_id, update=False)
@@ -670,19 +678,30 @@ def main(page: ft.Page) -> None:
             app.space.pause()
         elif state in (ft.AppLifecycleState.RESUME, ft.AppLifecycleState.SHOW):
             if state == ft.AppLifecycleState.RESUME:
-                sfx.play("power_up", 0.7)  # back in the app
+                sfx.play("download_complete", 0.7)  # back in the app
                 app.greet_on_open()  # Luma's welcome back after it (30 min cooldown)
             app.space.resume()
             app.resync_reminders()  # top the reminder queue up on return
+            if app.cloud.is_signed_in:
+                page.run_task(app.cloud.sync)
 
     page.on_app_lifecycle_state_change = lifecycle
     page.on_resize = lambda e: app.space.resize(page.width, page.height)
 
+    if app.cloud.is_signed_in:
+        page.run_task(app.cloud.sync)
+
     if app.game.profile.onboarded:
         mount_shell(app)
-        sfx.play("power_up", 0.7)  # app opened; Luma's welcome back follows it
+        sfx.play("download_complete", 0.7)  # app opened; Luma's welcome back follows it
         app.greet_on_open()
         app.resync_reminders(2.0)
+        if not app.game.profile.avatar_configured:
+            async def _prompt_avatar() -> None:
+                await asyncio.sleep(0.9)
+                avatars.prompt_existing_user_avatar(app)
+
+            page.run_task(_prompt_avatar)
         return
 
     run_onboarding(app)

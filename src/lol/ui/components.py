@@ -1207,9 +1207,8 @@ NAV_TABS: tuple[tuple[str, ft.IconData, ft.IconData] | None, ...] = (
     ("More", ft.Icons.MORE_HORIZ_ROUNDED, ft.Icons.MORE_HORIZ_ROUNDED),
 )
 NAV_CENTER = 2
-NAV_H = 68  # bar height; the center orb rises SLOT_RISE above it
-SLOT_SIZE = 56
-SLOT_RISE = 18
+NAV_H = 68  # bar height
+SLOT_SIZE = 48
 SLOT_SPIN_S = 28  # one slow turn of the rune ring (one rotate update per turn: cheap)
 
 
@@ -1261,14 +1260,14 @@ class NavTab(ft.Container):
         self.glyph.badge = _dot(badge)
 
 
-def _rune_ticks() -> list[ft.Control]:
+def _rune_ticks(size: float = 48) -> list[ft.Control]:
     """16 static rune ticks around the ring; every 4th is a small diamond."""
     out: list[ft.Control] = []
-    r, mid = SLOT_SIZE / 2 - 2, SLOT_SIZE / 2
+    r, mid = size / 2 - 2, size / 2
     for n in range(16):
         a = 2 * math.pi * n / 16
         big = n % 4 == 0
-        w, h = (4, 4) if big else (2, 5)
+        w, h = (3.5, 3.5) if big else (1.8, 3.5)
         out.append(ft.Container(
             width=w, height=h, left=mid + r * math.sin(a) - w / 2,
             top=mid - r * math.cos(a) - h / 2, rotate=a + (math.pi / 4 if big else 0),
@@ -1287,30 +1286,36 @@ class ArcaneSlot(ft.Container):
         self.pinned = False
         self.angle = 0.0
         self.spinning = False
-        self.glyph = ft.Icon(ft.Icons.ADD, size=28, color="#FFFFFF")
-        self.core = ft.Container(self.glyph, width=SLOT_SIZE - 6, height=SLOT_SIZE - 6,
+        self.glyph = ft.Icon(ft.Icons.ADD, size=24, color="#FFFFFF")
+        self.core = ft.Container(self.glyph, width=42, height=42,
                                  shape=ft.BoxShape.CIRCLE, alignment=ft.Alignment.CENTER)
-        self.halo = ft.Container(width=SLOT_SIZE, height=SLOT_SIZE, shape=ft.BoxShape.CIRCLE,
+        self.halo = ft.Container(width=48, height=48, shape=ft.BoxShape.CIRCLE,
                                  animate=Motion.anim(Motion.FADE_MS))
-        self.ring = ft.Container(ft.Stack(_rune_ticks(), width=SLOT_SIZE, height=SLOT_SIZE),
-                                 width=SLOT_SIZE, height=SLOT_SIZE, rotate=0,
+        self.ring = ft.Container(ft.Stack(_rune_ticks(48), width=48, height=48),
+                                 width=48, height=48, rotate=0,
                                  animate_rotation=ft.Animation(SLOT_SPIN_S * 1000,
                                                                ft.AnimationCurve.LINEAR),
                                  animate_opacity=Motion.anim(Motion.FADE_MS))
         self.orb = ft.Container(
             ft.Stack([self.halo, self.ring,
-                      ft.Container(self.core, width=SLOT_SIZE, height=SLOT_SIZE,
+                      ft.Container(self.core, width=48, height=48,
                                    alignment=ft.Alignment.CENTER)],
-                     width=SLOT_SIZE, height=SLOT_SIZE),
-            top=-SLOT_RISE, scale=1, animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK))
-        self.caption = ft.Text("", size=Type.CAPTION - 2, color=C.TEXT_DIM, max_lines=1,
-                               weight=ft.FontWeight.W_600, overflow=ft.TextOverflow.ELLIPSIS,
+                     width=48, height=48),
+            scale=1, animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK))
+        self.caption = ft.Text("", size=Type.CAPTION - 2.5, color=C.TEXT_DIM, max_lines=1,
+                               weight=ft.FontWeight.W_700, overflow=ft.TextOverflow.ELLIPSIS,
                                text_align=ft.TextAlign.CENTER, visible=False)
+        self.layout = ft.Column(
+            [self.orb, self.caption],
+            spacing=1,
+            tight=True,
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        )
         super().__init__(
-            content=ft.Stack([self.orb, ft.Container(self.caption, bottom=6)],
-                             alignment=ft.Alignment.TOP_CENTER,
-                             clip_behavior=ft.ClipBehavior.NONE),
-            expand=1, height=NAV_H, on_click=on_click, on_long_press=on_long_press,
+            content=self.layout,
+            expand=1, height=NAV_H, alignment=ft.Alignment.CENTER,
+            on_click=on_click, on_long_press=on_long_press,
         )
         self._paint()
 
@@ -1318,8 +1323,8 @@ class ArcaneSlot(ft.Container):
         col, on = self.color, self.active
         hex_col = col if isinstance(col, str) and col.startswith("#") else th.current().primary
         self.halo.shadow = [
-            ft.BoxShadow(blur_radius=22, spread_radius=2, color=C.a(col, 0.85 if on else 0.65)),
-            ft.BoxShadow(blur_radius=44, spread_radius=4, color=C.a(col, 0.40 if on else 0.22)),
+            ft.BoxShadow(blur_radius=18, spread_radius=1, color=C.a(col, 0.85 if on else 0.65)),
+            ft.BoxShadow(blur_radius=36, spread_radius=3, color=C.a(col, 0.40 if on else 0.22)),
         ]
         self.halo.bgcolor = ft.Colors.TRANSPARENT
         # 3D spherical gradient with specular highlight on top-left
@@ -1340,7 +1345,7 @@ class ArcaneSlot(ft.Container):
         """label None -> empty slot ('+', no clutter)."""
         self.pinned = label is not None
         self.glyph.icon = icon if self.pinned and icon else ft.Icons.ADD
-        self.glyph.size = 24 if self.pinned else 28
+        self.glyph.size = 20 if self.pinned else 24
         self.color = color if self.pinned and color else C.PRIMARY
         self.caption.value = th.tr(label) if self.pinned and label else ""
         self.caption.visible = self.pinned
@@ -1402,19 +1407,25 @@ class ArcaneNavBar(ft.BottomAppBar):
             self.items[n] = tab
             row.append(tab)
         self.selected_index = selected
-        super().__init__(
-            content=ft.Container(
-                ft.Row(row, spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                border=ft.Border(top=ft.BorderSide(1, C.a(C.PRIMARY, 0.22))),
-                height=NAV_H,
-            ),
-            bgcolor=C.a(C.SURFACE, 0.94), padding=ft.Padding.symmetric(horizontal=4),
-            height=NAV_H, elevation=0, clip_behavior=ft.ClipBehavior.NONE,
-            border_radius=ft.BorderRadius(top_left=22, top_right=22, bottom_left=0, bottom_right=0),
+        self.nav_row = ft.Row(row, spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        self.nav_container = ft.Container(
+            content=self.nav_row,
+            height=NAV_H,
+            padding=ft.Padding.symmetric(horizontal=4),
         )
-        for n, b in (badges or {}).items():
-            self.set_badge(n, b)
-        self.select(selected)
+        super().__init__(
+            content=ft.SafeArea(
+                self.nav_container,
+                top=False,
+                left=False,
+                right=False,
+                bottom=True,
+            ),
+            bgcolor=C.a(C.SURFACE, 0.94),
+            padding=0,
+            elevation=0,
+            clip_behavior=ft.ClipBehavior.NONE,
+        )
         for n, b in (badges or {}).items():
             self.set_badge(n, b)
         self.select(selected)

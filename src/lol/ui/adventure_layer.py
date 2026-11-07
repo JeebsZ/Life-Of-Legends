@@ -516,6 +516,12 @@ class AdventureRunCard(ft.Container):
         _upd(self)
 
     # ------------------------------------------------------------------ controls
+    def _on_select_mode(self, mode: TargetMode) -> None:
+        self.engine.target_mode = mode
+        self.engine.manual_target_id = None
+        self._sync()
+        self._safe_update()
+
     def _toggle_target_mode(self, _: Any = None) -> None:
         eng = self.engine
         eng.target_mode = (TargetMode.STRONGEST if eng.target_mode == TargetMode.LOWEST_HP

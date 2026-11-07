@@ -52,11 +52,13 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from lol.core import avatar_catalog
 from lol.core.catalog import FREE_THEMES
 from lol.core.models import (
     DEFAULT_NOTIFY_SOUND,
     MODULES,
     NOTIFY_SOUNDS,
+    AvatarCustomization,
     Bill,
     BodyProfile,
     CustomFood,
@@ -175,6 +177,15 @@ def _profile(raw: dict[str, Any], schema: int = SCHEMA) -> Profile:
 
     lang = raw.get("language")
     profile.language = lang if isinstance(lang, str) and lang in LANGUAGES else "en"
+    av_raw = raw.get("avatar_customization")
+    av_built = (
+        _build(AvatarCustomization, av_raw)
+        if isinstance(av_raw, dict)
+        else AvatarCustomization()
+    )
+    profile.avatar_customization = avatar_catalog.sanitize(av_built)
+    profile.avatar_configured = bool(raw.get("avatar_configured", False))
+    profile.avatar_bonus_claimed = bool(raw.get("avatar_bonus_claimed", False))
     return profile
 
 

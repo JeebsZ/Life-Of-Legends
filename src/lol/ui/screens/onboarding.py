@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING, Any
 
 import flet as ft
 
+from lol.core import avatar_catalog
 from lol.core import onboarding as ob
+from lol.core.models import AvatarCustomization
 from lol.ui import ambient, avatars, notify, sfx
 from lol.ui import components as ui
 from lol.ui import theme as th
@@ -30,11 +32,12 @@ from lol.ui.theme import C, Motion, Radius, Size, Space, Type
 if TYPE_CHECKING:
     from lol.ui.app import App
 
-STEPS = ("hello", "name", "focus", "relate0", "relate1", "relate2", "age", "sex", "time",
-         "theme", "plan")
+STEPS = ("hello", "name", "avatar", "focus", "relate0", "relate1", "relate2", "age", "sex",
+         "time", "theme", "plan")
 SKIPPABLE = {"focus", "relate0", "relate1", "relate2", "age", "sex", "time", "theme"}
 CHEERS = {
-    "hello": "", "name": "Nice to meet you", "focus": "Honesty helps",
+    "hello": "", "name": "Nice to meet you", "avatar": "Nice work! Customize your look",
+    "focus": "Honesty helps",
     "relate0": "No wrong answers", "relate1": "You're doing great",
     "relate2": "Almost halfway", "age": "Keeps your tips safe", "sex": "Just a few more",
     "time": "Small is powerful", "theme": "Make it yours", "plan": "Your plan is ready",
@@ -74,6 +77,7 @@ class Onboarding(ft.Container):
         self.step = 0
         self.name = "" if g.profile.name == DEFAULT_NAME else g.profile.name
         self.avatar_id = avatars.get(g.profile.avatar_id).id
+        self.avatar_custom = avatar_catalog.sanitize(g.profile.avatar_customization)
         self.answers = _copy(g.profile.onboarding) if redo else ob.OnboardingAnswers()
         self.sex: str | None = g.body.sex
         self.plan: ob.Plan | None = None
@@ -371,7 +375,7 @@ class Onboarding(ft.Container):
     # ------------------------------------------------------------------ 2 name + sigil
     def _step_name(self) -> tuple[ft.Control, list[ft.Control]]:
         av = avatars.get(self.avatar_id)
-        self._plate_bubble = avatars.bubble(self.avatar_id, 72)
+        self._plate_bubble = avatars.bubble(self.avatar_id, 72, custom=self.avatar_custom)
         self._plate_name = ft.Text(self.name or DEFAULT_NAME, size=Type.DISPLAY,
                                    weight=ft.FontWeight.W_900, color=C.TEXT, max_lines=1,
                                    overflow=ft.TextOverflow.ELLIPSIS,
@@ -401,7 +405,7 @@ class Onboarding(ft.Container):
         def picked(aid: str) -> None:
             self.avatar_id = aid
             a = avatars.get(aid)
-            avatars.restyle_bubble(self._plate_bubble, aid)
+            avatars.restyle_bubble(self._plate_bubble, aid, custom=self.avatar_custom)
             self._plate_sigil.value = f"{a.name} sigil · Level 1"
             ambient.set_glass_tint(self._plate, a.color)
             ui.refresh(self._plate)
@@ -417,6 +421,28 @@ class Onboarding(ft.Container):
             avatars.AvatarPicker(self.avatar_id, size=42, on_change=picked),
         ], spacing=Space.MD, horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             scroll=ft.ScrollMode.AUTO)
+        return stage, self._footer(True)
+
+    # ------------------------------------------------------------------ 2b avatar customization
+    def _on_avatar_custom(self, custom: AvatarCustomization) -> None:
+        self.avatar_custom = custom
+
+    def _step_avatar(self) -> tuple[ft.Control, list[ft.Control]]:
+        customizer = avatars.CharacterCustomizer(
+            self.avatar_custom,
+            hero_name=self.name or DEFAULT_NAME,
+            on_change=self._on_avatar_custom,
+            on_limit_toast=lambda msg: self.app.toast(msg, ft.Icons.INFO_OUTLINE),
+        )
+        stage = ft.Column(
+            [
+                *self._title("Meet your avatar", "Customize it however you like"),
+                customizer,
+            ],
+            spacing=Space.MD,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            scroll=ft.ScrollMode.AUTO,
+        )
         return stage, self._footer(True)
 
     # ------------------------------------------------------------------ 3 focus areas
@@ -865,6 +891,10 @@ class Onboarding(ft.Container):
         await ui.buzz("heavy")
         await ui.pop(self._go, 1.06)
         g.finish_onboarding(self.name or g.profile.name or DEFAULT_NAME, self.avatar_id)
+        g.set_profile(avatar_customization=self.avatar_custom, avatar_configured=True)
+        bonus = g.claim_avatar_bonus()
+        if bonus > 0:
+            app.toast(f"+{bonus} coins for creating your avatar!", ft.Icons.MONETIZATION_ON)
         if self.sex is not None:
             g.set_body(sex=self.sex)
         plan, _added = ob.apply(g, self.answers, today, first_run=not self.redo)

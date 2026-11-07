@@ -27,12 +27,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "file:C:/GAMEDEV/RuinRush(Game)/2026-11-04/i-x20/outputs/LifeQuest_Expanded_Feature_Design.md",
+                "file": "Design/achievements.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "LifeQuest_Expanded_Feature_Design"
+              "title": "achievements"
             }
           }
         ],
@@ -205,11 +205,14 @@
   },
   "active": "895bad552b7453e6",
   "lastOpenFiles": [
+    "Design/roadmap-batches.md",
+    "Design/paywall-setup-guide.md",
+    "Design/ui-system.md",
+    "Setup-memo.md",
+    "file:C:/GAMEDEV/RuinRush(Game)/2026-11-04/i-x20/outputs/LifeQuest_Expanded_Feature_Design.md",
     "Changelog/2026-11-05-center-nav-slot.md",
     "Design/chatgpt-2026-11-05-planning.md",
     "Design/onboarding-personalize.md",
-    "Design/paywall-setup-guide.md",
-    "Design/roadmap-batches.md",
     "Design/v1.5-memo.md",
     "Changelog/2026-11-05-run-tracker.md",
     "Changelog/2026-11-05-rose-arcana-theme.md",
@@ -217,7 +220,6 @@
     "Design/body-meals-memo.md",
     "Changelog/2026-11-04-icosphere-impact-staged-lumen.md",
     "Design/achievements.md",
-    "Design/ui-system.md",
     "Design/v1.3-memo.md",
     "Design/content-sources.md",
     "Design/meal-scan-on-device.md",
@@ -239,8 +241,6 @@
     "Design/refs/2-milestone.webp",
     "Design/refs/1-notice.png",
     "Design/refs",
-    "file:C:/GAMEDEV/RuinRush(Game)/2026-11-04/i-x20/outputs/LifeQuest_Expanded_Feature_Design.md",
-    "Changelog/2026-11-04-lumen-voice-arcane.md",
     "Design/sedNwdL6O",
     "Design/sedX0b42H",
     "Changelog/2026-11-04-lumen-voice-arcane.md.tmp.10144.5e39da159133",

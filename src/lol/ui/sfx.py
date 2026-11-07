@@ -60,7 +60,7 @@ SINGLE: tuple[str, ...] = (
     "skill_acquired", "milestone", "alert_soft", "error_soft", "timer_tick", "timer_done",
     "lumen_hum", "distort", "scan_tick", "scan_done", "shutter", "unlock", "upgrade",
     "mission_complete", "rank_up", "purchase", "objective_new", "power_up", "low_energy",
-    "low_health", "loading", *NOTIFY,
+    "low_health", "loading", "text_blip_01", "download_complete", *NOTIFY,
 )
 # Muted app-wide (resolved sound names): plain button taps and toggle/select clicks. Feedback
 # for those comes from haptics + visuals; completion/reward sounds stay. Remove a name to
@@ -68,7 +68,8 @@ SINGLE: tuple[str, ...] = (
 SILENT: frozenset[str] = frozenset({"tap", "toggle_on"})
 # Names that play another sound (no files of their own).
 ALIASES: dict[str, str] = {"toggle": "toggle_on", "toggle_off": "toggle_on",
-                           "sheet_open": "tab_open", "sheet_close": "back"}
+                           "tab_open": "text_blip_01", "tab_close": "text_blip_01",
+                           "sheet_open": "text_blip_01", "sheet_close": "back"}
 # Layered moments: name -> ((sound, offset s, volume scale), ...). The first layer is the
 # heavy one we keep; pack sounds go on top of it, never instead of it.
 COMBOS: dict[str, tuple[tuple[str, float, float], ...]] = {
@@ -100,6 +101,7 @@ LENGTHS: dict[str, float] = {
     "power_up": 1.26, "low_energy": 0.88, "low_health": 1.67, "loading": 1.33, "type": 0.24,
     "distort": 0.66, "scan_tick": 0.32, "scan_done": 0.65, "shutter": 0.41,
     "level_up": 2.03, "skill_acquired": 2.27, "milestone": 3.5, "lumen_hum": 2.6,
+    "text_blip_01": 0.35, "download_complete": 1.15,
 }
 SOUNDS: tuple[str, ...] = (*VARIANTS, *SINGLE)        # names with files
 NAMES: tuple[str, ...] = (*SOUNDS, *ALIASES, "notice", *COMBOS)  # everything play() accepts

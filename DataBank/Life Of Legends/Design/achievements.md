@@ -12,15 +12,15 @@ Status: written list only, per v1.2 spec C.7. Visual badge design comes later.
 - All data needed already exists in the save: quests `done_on`, side quest steps, skills, logs, focus sessions, bill payments, templates, redemptions.
 
 ## First steps (account)
-| # | Name | How it's earned | Tiers | Icon idea |
-|---|------|-----------------|-------|-----------|
-| 1 | First Light | Complete your first quest. | — | A small sunrise over a doorway |
-| 2 | Chosen Road | Set up your profile and pick a name and avatar. | — | A signpost with one arrow |
-| 3 | Link in the Chain | Complete your first side quest step. | — | One glowing chain link |
-| 4 | Chainbreaker | Finish your first side quest chain. | B 1 / S 5 / G 15 chains | A full chain forming a circle |
-| 5 | Skill Unlocked | Unlock your first skill. | B 1 / S 5 / G 12 skills | An opening lock with a spark |
-| 6 | Field Notes | Write your first logbook entry. | B 1 / S 25 / G 100 entries | A notebook with a feather pen |
-| 7 | Deep Breath | Log your first focus session (any length counts). | — | An hourglass with a calm wave |
+| #   | Name              | How it's earned                                   | Tiers                      | Icon idea                      |
+| --- | ----------------- | ------------------------------------------------- | -------------------------- | ------------------------------ |
+| 1   | First Light       | Complete your first quest.                        | —                          | A small sunrise over a doorway |
+| 2   | Chosen Road       | Set up your profile and pick a name and avatar.   | —                          | A signpost with one arrow      |
+| 3   | Link in the Chain | Complete your first side quest step.              | —                          | One glowing chain link         |
+| 4   | Chainbreaker      | Finish your first side quest chain.               | B 1 / S 5 / G 15 chains    | A full chain forming a circle  |
+| 5   | Skill Unlocked    | Unlock your first skill.                          | B 1 / S 5 / G 12 skills    | An opening lock with a spark   |
+| 6   | Field Notes       | Write your first logbook entry.                   | B 1 / S 25 / G 100 entries | A notebook with a feather pen  |
+| 7   | Deep Breath       | Log your first focus session (any length counts). | —                          | An hourglass with a calm wave  |
 
 ## Exploration (account)
 | # | Name | How it's earned | Tiers | Icon idea |

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import flet as ft
 
 from lol.core import i18n
+from lol.core.cloud_save import SyncState
 from lol.core.models import NOTIFY_SOUNDS
 from lol.ui import components as ui
 from lol.ui import notify, sfx
@@ -48,6 +49,8 @@ class SettingsScreen:
             theme_picker(self.app),
             ui.SectionHeader("Middle button"),
             self._middle_button(),
+            ui.SectionHeader("Cloud Save"),
+            self._cloud_save_section(),
             ui.SectionHeader("Tracking"),
             self._modules(),
             ui.SectionHeader("Notifications"),
@@ -73,14 +76,133 @@ class SettingsScreen:
         run_onboarding(self.app, redo=True)
 
     def on_enter(self) -> None:
+        self.app.cloud.on_change = self.restyle
         if notify.available():
             self.app.page.run_task(self._check_permission)
+
+    def on_leave(self) -> None:
+        self.app.cloud.on_change = None
 
     async def _check_permission(self) -> None:
         granted = await notify.permission_granted()
         if granted != self.permission:
             self.permission = granted
             self.restyle()
+
+    # ------------------------------------------------------------------ cloud save
+    def _cloud_save_section(self) -> ft.Control:
+        cloud = self.app.cloud
+        if cloud.is_signed_in:
+            if cloud.state == SyncState.SYNCING:
+                status_text = "Syncing with Google Drive..."
+                status_icon = ft.Icons.SYNC
+                status_color = C.PRIMARY
+            elif cloud.state == SyncState.ERROR:
+                err = cloud.error_message or "Unknown error"
+                status_text = f"Sync issue: {err}"
+                status_icon = ft.Icons.ERROR_OUTLINE
+                status_color = C.DANGER
+            else:
+                if cloud.last_sync_time:
+                    status_text = (
+                        f"Last synced: {cloud.last_sync_time.strftime('%b %d, %H:%M UTC')}"
+                    )
+                else:
+                    status_text = "Ready to sync"
+                status_icon = ft.Icons.CLOUD_DONE
+                status_color = C.SUCCESS
+
+            async def do_sync(_: Any = None) -> None:
+                await ui.buzz("light")
+                await cloud.sync()
+                self.restyle()
+
+            def do_logout(_: Any = None) -> None:
+                cloud.logout()
+                self.restyle()
+
+            return common.card(
+                ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.Icon(ft.Icons.ACCOUNT_CIRCLE, color=C.PRIMARY, size=24),
+                                ft.Column(
+                                    [
+                                        ft.Text(
+                                            cloud.user_email or "Google Account",
+                                            size=Type.BODY,
+                                            weight=ft.FontWeight.W_700,
+                                            color=C.TEXT,
+                                        ),
+                                        ft.Row(
+                                            [
+                                                ft.Icon(status_icon, size=14, color=status_color),
+                                                ft.Text(status_text, size=Type.CAPTION, color=status_color),
+                                            ],
+                                            spacing=Space.XXS,
+                                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                        ),
+                                    ],
+                                    spacing=2,
+                                    expand=True,
+                                ),
+                            ],
+                            spacing=Space.SM,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        common.hint(
+                            "Your save is safely synced to your private Google Drive AppData folder."
+                        ),
+                        ft.Row(
+                            [
+                                common.primary_button("Sync now", do_sync, icon=ft.Icons.SYNC),
+                                common.secondary_button("Sign out", do_logout, icon=ft.Icons.LOGOUT),
+                            ],
+                            spacing=Space.SM,
+                        ),
+                    ],
+                    spacing=Space.SM,
+                    tight=True,
+                ),
+                padding=Space.MD,
+            )
+
+        # Not signed in
+        async def do_login(_: Any = None) -> None:
+            await ui.buzz("light")
+            await cloud.start_login()
+
+        return common.card(
+            ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.CLOUD_QUEUE, color=C.PRIMARY, size=24),
+                            ft.Text(
+                                "Google Drive Cloud Save",
+                                size=Type.BODY,
+                                weight=ft.FontWeight.W_700,
+                                color=C.TEXT,
+                            ),
+                        ],
+                        spacing=Space.SM,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    common.hint(
+                        "Sign in with your Gmail to securely backup your hero profile, quests, "
+                        "and progress to your Google Drive. Saves are hidden in Google's AppData "
+                        "folder so they won't clutter your Drive."
+                    ),
+                    common.primary_button(
+                        "Sign in with Google", do_login, icon=ft.Icons.LOGIN
+                    ),
+                ],
+                spacing=Space.SM,
+                tight=True,
+            ),
+            padding=Space.MD,
+        )
 
     # ------------------------------------------------------------------ middle button
     def _middle_button(self) -> ft.Control:

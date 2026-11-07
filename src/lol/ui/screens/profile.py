@@ -80,7 +80,7 @@ class ProfileScreen:
         top = max(th.PATH_IDS, key=lambda pid: p.path_xp.get(pid, 0))
         top_txt = (f"Strongest Path: {th.path_name(top)}" if p.path_xp.get(top, 0)
                    else "Complete a quest to start a Path")
-        bubble = avatars.bubble(p.avatar_id, 60)
+        bubble = avatars.bubble(p.avatar_id, 60, custom=p.avatar_customization)
         bubble.on_click = lambda e: self._open_profile()
         identity = ft.Row([
             bubble,
@@ -97,7 +97,15 @@ class ProfileScreen:
                           width=Size.TAP, height=Size.TAP,
                           on_click=lambda e: self._open_profile()),
         ], spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.CENTER)
-        return common.card(ft.Column([identity, ft.Divider(height=1, color=C.OUTLINE),
+        customize_row = ft.Row([
+            common.secondary_button(
+                "Customize Avatar",
+                lambda _: avatars.open_character_editor(self.app, on_saved=self.restyle),
+                icon=ft.Icons.FACE_RETOUCHING_NATURAL,
+            )
+        ])
+        return common.card(ft.Column([identity, customize_row,
+                                      ft.Divider(height=1, color=C.OUTLINE),
                                       voice_controls(self.app)],
                                      spacing=Space.MD, tight=True))
 
@@ -111,6 +119,10 @@ class ProfileScreen:
         name.capitalization = ft.TextCapitalization.WORDS
         picker = avatars.AvatarPicker(p.avatar_id, size=46,
                                       on_change=lambda aid: state.update(avatar=aid))
+
+        def open_customizer(_: Any = None) -> None:
+            common.close(sheet)
+            avatars.open_character_editor(app, on_saved=self.restyle)
 
         def save(_: Any = None) -> None:
             text = (name.value or "").strip()
@@ -129,7 +141,16 @@ class ProfileScreen:
 
         name.on_submit = save
         sheet = common.open_sheet(app.page, "Edit profile", [
-            name, common.hint("Avatar"), picker,
+            name,
+            common.hint("Sigil ring color"),
+            picker,
+            ft.Row([
+                common.secondary_button(
+                    "Customize Avatar",
+                    open_customizer,
+                    icon=ft.Icons.FACE_RETOUCHING_NATURAL,
+                )
+            ]),
             ft.Row([common.primary_button("Save", save, icon=ft.Icons.CHECK)]),
         ])
 

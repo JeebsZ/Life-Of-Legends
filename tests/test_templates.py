@@ -13,7 +13,7 @@ def test_starter_library():
     ts = g.templates()
     assert len(ts) >= 15 and all(t.builtin for t in ts)
     titles = " ".join(t.title.lower() for t in ts)
-    for word in ("skin care", "oral care", "facial", "stretch", "gym", "weekly planning",
+    for word in ("skin care", "oral care", "face mask", "stretch", "gym", "weekly planning",
                  "meal prep", "read 20 pages", "tidy desk", "water", "journal", "walk"):
         assert word in titles, word
     assert len({t.id for t in ts}) == len(ts)

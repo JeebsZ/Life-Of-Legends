@@ -8,8 +8,8 @@ import flet as ft
 
 from lol.core.models import Reward
 from lol.core.premium import PREMIUM_NAME
+from lol.ui import avatars, sfx
 from lol.ui import components as ui
-from lol.ui import sfx
 from lol.ui import theme as th
 from lol.ui.screens import common, editors
 from lol.ui.theme import C, Radius, Size, Space, Type
@@ -45,11 +45,54 @@ class RewardsScreen:
             ], spacing=2, expand=True, tight=True),
         ], spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START))
 
+        wardrobe_sub = (
+            "Create your chibi look and claim +200 free coins!"
+            if not g.profile.avatar_bonus_claimed
+            else "Customize your chibi hair, outfit, eyes, and stacked makeup."
+        )
+        wardrobe = common.card(
+            ft.Row(
+                [
+                    avatars.bubble(
+                        g.profile.avatar_id, 52, custom=g.profile.avatar_customization
+                    ),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                "Character Wardrobe",
+                                size=Type.TITLE,
+                                weight=ft.FontWeight.W_800,
+                                color=C.TEXT,
+                            ),
+                            ft.Text(wardrobe_sub, size=Type.CAPTION, color=C.TEXT_DIM),
+                        ],
+                        spacing=2,
+                        expand=True,
+                        tight=True,
+                    ),
+                    common.secondary_button(
+                        "Customize",
+                        lambda _: avatars.open_character_editor(
+                            self.app, on_saved=self._refresh
+                        ),
+                        icon=ft.Icons.FACE_RETOUCHING_NATURAL,
+                        expand=False,
+                    ),
+                ],
+                spacing=Space.MD,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=Space.MD,
+        )
+
         personal = [r for r in g.rewards if r.kind == "personal"]
         self.tiles = []
         items: list[ft.Control] = [
-            intro, ui.SectionHeader("My rewards", count=len(personal), action_text="New",
-                                    on_action=self._open_add)]
+            intro,
+            wardrobe,
+            ui.SectionHeader("My rewards", count=len(personal), action_text="New",
+                             on_action=self._open_add),
+        ]
         if personal:
             grid = []
             for r in personal:

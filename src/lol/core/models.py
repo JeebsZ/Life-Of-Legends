@@ -550,6 +550,20 @@ class OnboardingAnswers:
 
 
 @dataclass
+class AvatarCustomization:
+    """Modular layered character avatar (256x256 transparent PNG layers)."""
+
+    body: str = "BaseBody"
+    clothes: str = "Clothes1"
+    eyes: str = "Eyes1"
+    hair: str = "Hair1"
+    mouth: str = "Mouth1"
+    nose: str = "Nose1"
+    makeups: list[str] = field(default_factory=list)  # up to 3 stacked makeups
+    unlocked: list[str] = field(default_factory=list)  # unlocked cosmetic IDs
+
+
+@dataclass
 class Profile:
     name: str = "Legend"
     level: int = 1
@@ -577,6 +591,9 @@ class Profile:
     language: str = "en"  # active UI language code (core/i18n.py)
     adventure_coins_today: int = 0  # creature trinket coins earned on `adventure_coins_day`
     adventure_coins_day: str = ""  # ISO date for separate adventure coin cap
+    avatar_customization: AvatarCustomization = field(default_factory=AvatarCustomization)
+    avatar_configured: bool = False  # True once the player saves their custom chibi avatar
+    avatar_bonus_claimed: bool = False  # True once the +200 coin avatar bonus is claimed
 
 
 # Notification sounds the user can pick (Settings): Sci-Fi pack notify_01..08.
