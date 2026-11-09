@@ -1,4 +1,4 @@
-"""What's New / In-App TL;DR Patch Notes Dialog for LUMA v0.2.1."""
+"""What's New / In-App TL;DR Patch Notes Dialog for LUMA v0.2.2."""
 
 from __future__ import annotations
 
@@ -17,40 +17,34 @@ if TYPE_CHECKING:
 
 CHANGELOG_ITEMS = (
     (
-        ft.Icons.CALL_SPLIT,
+        ft.Icons.PARK_ROUNDED,
+        "#06D6A0",
+        "Mind Grove: The Fitness Farm",
+        "Grow 16 mystical crops fueled by your real-world hydration, steps, runs, and workouts! Fuse seeds at the Botanical Altar for rare mutations and companion buffs.",
+    ),
+    (
+        ft.Icons.FLASH_ON_ROUNDED,
         C.GOLD,
-        "Split Bills & Receipt OCR",
-        "Split expenses evenly in the middle or per dish/item with your friends. Upload your QR code (PayPal, Venmo, GCash, Bank) so friends can pay in a tap!",
+        "Home Screen Quick Record Hub",
+        "1-tap record bar right on your Today dashboard for quick workout logging, water sips, GPS runs, and daily reflections.",
     ),
     (
-        ft.Icons.LANGUAGE,
-        C.PRIMARY,
-        "Global Currency Switcher",
-        "Switch currency symbols anytime (₱, $, €, £, ¥, ₹, ₩, A$, C$, S$) across your bills and tracking.",
+        ft.Icons.AUTO_STORIES,
+        "#C77DFF",
+        "Daily Journal & Reflection",
+        "Track daily moods, wins, and mindful reflections to earn Monk XP and build lifelong positive habits.",
     ),
     (
-        ft.Icons.PALETTE,
-        "#A78BFA",
-        "Unified Personalization Shop",
-        "Themes, background particle FX, avatar frames, titles, companions, and XP trail glows are now unified in one shop under Rewards.",
-    ),
-    (
-        ft.Icons.AUTO_AWESOME,
-        "#FF8FA3",
-        "Realistic Sakura & Particle FX",
-        "Background atmospheric particles now feature authentic fluttering sakura petals, soft fireflies, embers, and snowfall.",
-    ),
-    (
-        ft.Icons.FITNESS_CENTER,
-        "#4FE3F0",
-        "Clean Workout Hub & Star-Iron Forge",
-        "Streamlined 'Start workout' button and concise relic forging recipes to power up your hero.",
+        ft.Icons.PHOTO_LIBRARY_ROUNDED,
+        "#FF6B6B",
+        "Media Studio & IG Aesthetic Lens",
+        "Smart gallery cleaner to batch-delete screenshots and TikTok saves, plus an AI aesthetic scorer that rates your photos for Instagram readiness!",
     ),
 )
 
 
 def prompt_whats_new(app: App, on_done: Any = None) -> None:
-    """Show the v0.2.1 What's New modal once per day or update cycle."""
+    """Show the v0.2.2 What's New modal once per day or update cycle."""
     today_str = app.today().isoformat()
     last_seen = getattr(app.game.profile, "last_seen_changelog", "")
     if last_seen == today_str:

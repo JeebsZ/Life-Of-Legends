@@ -20,8 +20,8 @@ org = "com.companions"
 product = "LUMA: Your Lifestyle QoL"
 company = "Companions"
 bundle_id = "com.companions.LUMA"
-build_number = 18
-build_version = "0.2.1"
+build_number = 19
+build_version = "0.2.2"
 
 [tool.flet.app]
 path = "src"

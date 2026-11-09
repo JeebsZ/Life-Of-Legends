@@ -38,6 +38,7 @@ from lol.core.models import (
     ExerciseEntry,
     FocusSession,
     Insight,
+    JournalEntry,
     LogEntry,
     PathDef,
     PersonalRecord,
@@ -2264,8 +2265,45 @@ class Game(BodyMixin, RunMixin, StudyMixin, PremiumMixin):
         days = [d for q in self.quests for d in q.done_on]
         days += [st.done_on for sq in self.data.side_quests for st in sq.steps if st.done_on]
         for group in (self.data.logs, self.data.focus_sessions, self.data.workouts,
-                      self.data.water, self.data.energy):
+                      self.data.water, self.data.energy, self.data.journals):
             days += [x.day for x in group]
         days += [e.logged_on or e.night_of for e in self.data.sleep]
         days += [d for b in self.data.bills for d in b.paid]
         return max((_day(d) for d in days), default=None)
+
+    # --- Daily Journal (schema 5 additive) ----------------------------------------------------
+    def add_journal(
+        self,
+        mood: str,
+        gratitude: str = "",
+        highlight: str = "",
+        notes: str = "",
+        tags: list[str] | None = None,
+        today: date | None = None,
+        time_str: str = "",
+    ) -> Completion:
+        d = today or (self.today() if hasattr(self, "today") else date.today())
+        c = self._award(20, 5, MONK_PATH, d)
+        t_now = time_str if time_str else datetime.now().strftime("%H:%M")
+        entry = JournalEntry(
+            id=self._new_id("jn"),
+            day=_iso(d),
+            time=_hm(t_now) if ":" in t_now else "12:00",
+            mood=mood,
+            gratitude=gratitude.strip(),
+            highlight=highlight.strip(),
+            notes=notes.strip(),
+            tags=list(tags or []),
+            xp=c.xp,
+        )
+        self.data.journals.append(entry)
+        c.ref_id = entry.id
+        return c
+
+    def delete_journal(self, entry_id: str) -> None:
+        self.data.journals = [j for j in self.data.journals if j.id != entry_id]
+
+    def journal_entries(self, day: date | None = None) -> list[JournalEntry]:
+        if day is None:
+            return sorted(self.data.journals, key=lambda j: (j.day, j.time), reverse=True)
+        return [j for j in self.data.journals if j.day == _iso(day)]

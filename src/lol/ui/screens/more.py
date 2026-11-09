@@ -27,6 +27,9 @@ if TYPE_CHECKING:
 TILES: dict[str, tuple[str, ft.IconData, str]] = {
     "profile": ("Profile", ft.Icons.PERSON, C.PRIMARY),
     "daily_login": ("Daily Streak", ft.Icons.AUTO_AWESOME, th.C.GOLD),
+    "grove": ("Mind Grove", ft.Icons.PARK_ROUNDED, "#06D6A0"),
+    "journal": ("Daily Journal", ft.Icons.AUTO_STORIES, "#C77DFF"),
+    "media_curator": ("Media Studio", ft.Icons.PHOTO_LIBRARY_ROUNDED, "#FF6B6B"),
     "skills": ("Skills", ft.Icons.ACCOUNT_TREE, "#A78BFA"),
     "achievements": ("Achievements", ft.Icons.EMOJI_EVENTS, "#F5C66B"),
     "report": ("Luma Report", ft.Icons.INSIGHTS, "#4FE3F0"),
@@ -50,9 +53,9 @@ TILES: dict[str, tuple[str, ft.IconData, str]] = {
 }
 MODULE_TILES = {"workout", "sleep", "water", "energy", "insights", "body", "meals", "run"}  # hidden when switched off
 SECTIONS = (
-    ("You", ("profile", "daily_login", "skills", "achievements", "report")),
+    ("You", ("profile", "daily_login", "grove", "skills", "achievements", "report")),
     ("Track", ("workout", "run", "sleep", "water", "energy", "body", "meals", "insights")),
-    ("Plan & focus", ("bills", "calendar", "focus", "study", "templates", "logbook")),
+    ("Plan & focus", ("journal", "media_curator", "bills", "calendar", "focus", "study", "templates", "logbook")),
     ("Data & app", ("backup", "settings", "premium")),
 )
 COMING_SOON: set[str] = set()
@@ -64,6 +67,15 @@ def _make(app: App, key: str) -> Any:
     if key == "profile":
         from lol.ui.screens.profile import ProfileScreen
         return ProfileScreen(app)
+    if key == "grove":
+        from lol.ui.screens.grove import GroveScreen
+        return GroveScreen(app)
+    if key == "journal":
+        from lol.ui.screens.journal import JournalScreen
+        return JournalScreen(app)
+    if key == "media_curator":
+        from lol.ui.screens.media_curator import MediaCuratorScreen
+        return MediaCuratorScreen(app)
     if key == "achievements":
         from lol.ui.screens.achievements import AchievementsScreen
         return AchievementsScreen(app)

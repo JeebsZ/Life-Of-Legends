@@ -66,6 +66,7 @@ from lol.core.models import (
     EnergyCheckin,
     ExerciseEntry,
     FocusSession,
+    JournalEntry,
     LogEntry,
     MealEntry,
     MealItem,
@@ -107,7 +108,7 @@ V0_STAT_TO_PATH = {"health": "warrior", "mind": "scholar", "wealth": "steward"}
 LIST_KEYS = ("quests", "bills", "rewards", "logs", "side_quests", "skills", "templates",
              "hidden_templates", "focus_sessions", "workouts", "workout_templates", "sleep",
              "water", "energy", "weights", "meals", "custom_foods", "favorite_foods", "runs",
-             "decks", "study_sessions", "expenses", "split_bills", "savings_goals")
+             "decks", "study_sessions", "expenses", "split_bills", "savings_goals", "journals")
 STR_LIST_KEYS = ("hidden_templates", "favorite_foods")
 PHOTO_DIR = "meal_photos"
 
@@ -342,6 +343,22 @@ def _split_bill(raw: dict[str, Any]) -> SplitBill:
     return sb
 
 
+def _grove(raw: dict[str, Any] | None) -> Any:
+    if not isinstance(raw, dict):
+        return None
+    from lol.core.grove import CropPlot, GroveState
+
+    plots = [_build(CropPlot, p) for p in raw.get("plots", []) if isinstance(p, dict)]
+    return GroveState(
+        plots=plots if plots else [CropPlot(plot_id=i) for i in range(6)],
+        seeds={str(k): int(v) for k, v in (raw.get("seeds") or {}).items()},
+        harvested={str(k): int(v) for k, v in (raw.get("harvested") or {}).items()},
+        total_harvests=int(raw.get("total_harvests", 0)),
+        discovered_fusions=[str(x) for x in raw.get("discovered_fusions", [])],
+        last_awarded_habits={str(k): str(v) for k, v in (raw.get("last_awarded_habits") or {}).items()},
+    )
+
+
 def _min_next_id(data: SaveData) -> int:
     """1 + the biggest numeric id suffix in use, so new ids never collide (built-in template
     ids like "t-skin-care" have no number and are ignored)."""
@@ -350,7 +367,7 @@ def _min_next_id(data: SaveData) -> int:
                               data.workouts, data.workout_templates, data.sleep, data.water,
                               data.energy, data.weights, data.meals, data.custom_foods, data.runs,
                               data.decks, data.study_sessions, data.expenses, data.split_bills,
-                              data.savings_goals,
+                              data.savings_goals, data.journals,
                               [c for d in data.decks for c in d.cards])
            for x in group]
     nums = [int(m.group(1)) for i in ids if (m := _ID_NUM.match(str(i)))]
@@ -401,6 +418,8 @@ def from_dict(raw: dict[str, Any], today: date | None = None) -> SaveData:
         star_iron=int(raw.get("star_iron", 0)),
         exercise_prs={str(k): float(v) for k, v in (raw.get("exercise_prs") or {}).items()},
         unlocked_workout_traits=[str(x) for x in raw.get("unlocked_workout_traits", [])],
+        grove=_grove(raw.get("grove")),
+        journals=[_build(JournalEntry, j) for j in raw.get("journals", []) if isinstance(j, dict)],
         next_id=raw.get("next_id", 1),
         legacy=raw.get("legacy"),
     )

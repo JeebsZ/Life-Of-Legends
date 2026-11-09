@@ -27,7 +27,7 @@ def get_version_info() -> tuple[str, str]:
     num_match = re.search(r'build_number\s*=\s*(\d+)', pyproject)
     ver_match = re.search(r'build_version\s*=\s*"([^"]+)"', pyproject)
     build_num = num_match.group(1) if num_match else "18"
-    build_ver = ver_match.group(1) if ver_match else "0.2.1"
+    build_ver = ver_match.group(1) if ver_match else "0.2.2"
     return build_num, build_ver
 
 

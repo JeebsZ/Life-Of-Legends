@@ -6,8 +6,8 @@ import os
 
 # App identity & Google Play Store info
 APP_PACKAGE_ID = os.getenv("LUMA_PACKAGE_ID", "com.companions.LUMA")
-APP_VERSION = os.getenv("LUMA_APP_VERSION", "0.2.1")
-APP_BUILD_NUMBER = int(os.getenv("LUMA_BUILD_NUMBER", "18"))
+APP_VERSION = os.getenv("LUMA_APP_VERSION", "0.2.2")
+APP_BUILD_NUMBER = int(os.getenv("LUMA_BUILD_NUMBER", "19"))
 PLAY_STORE_URL = os.getenv(
     "LUMA_PLAY_STORE_URL",
     f"https://play.google.com/store/apps/details?id={APP_PACKAGE_ID}",

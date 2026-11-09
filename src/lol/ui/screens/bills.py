@@ -448,7 +448,7 @@ class BillsScreen:
         img_box: ft.Control
         if qr_exists:
             img_box = ft.Container(
-                ft.Image(src=qr_path, width=230, height=230, fit=ft.ImageFit.CONTAIN),
+                ft.Image(src=qr_path, width=230, height=230, fit=ft.BoxFit.CONTAIN),
                 alignment=ft.Alignment.CENTER,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=Radius.MD,
@@ -512,14 +512,13 @@ class BillsScreen:
 
     async def _scan_receipt_bytes(self) -> tuple[float | None, str | None]:
         """Check free daily OCR quota / rewarded ad gate, and scan receipt via Camera or Photo Picker."""
-        allowed = await ads.limit_gate(self.app, "note_scan", "receipt scan")
+        allowed = await ads.limit_gate(self.app, "note_scan")
         if not allowed:
             return None, None
         raw = await capture(self.app)
         if not raw:
             return None, None
-        self.app.game.use_quota("note_scan", self.app.today())
-        self.app.save()
+        ads.spend(self.app, "note_scan")
         tmp_path = storage.data_dir() / "receipt_scan_tmp.jpg"
         tmp_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path.write_bytes(raw)

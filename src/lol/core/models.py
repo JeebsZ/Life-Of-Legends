@@ -329,6 +329,21 @@ class EnergyCheckin:
 
 
 @dataclass
+class JournalEntry:
+    """A daily reflection or mindfulness entry (schema 5 additive)."""
+
+    id: str
+    day: str  # ISO date
+    time: str = ""  # "HH:MM"
+    mood: str = "good"  # "great" | "good" | "neutral" | "tired" | "stressed"
+    gratitude: str = ""  # "One thing I am grateful for..."
+    highlight: str = ""  # "Best moment of today..."
+    notes: str = ""  # Free-form journaling / thoughts
+    tags: list[str] = field(default_factory=list)
+    xp: int = 20  # XP awarded to the Monk / Mind Path
+
+
+@dataclass
 class WaterSettings:
     daily_goal_ml: int | None = None  # None = no goal (no universal target)
     unit: str = "ml"  # display unit; amounts are always stored in ml
@@ -753,5 +768,7 @@ class SaveData:
     star_iron: int = 0  # Star-Iron Ore earned from lifting tonnage (1 kg = 1 ore)
     exercise_prs: dict[str, float] = field(default_factory=dict)  # exercise_id -> max_weight_kg
     unlocked_workout_traits: list[str] = field(default_factory=list)  # awakened traits
+    grove: Any = None  # GroveState (Mind Grove fitness farm, schema 5 additive)
+    journals: list[JournalEntry] = field(default_factory=list)  # Daily journal reflections (schema 5 additive)
     next_id: int = 1
     legacy: dict[str, Any] | None = None  # raw v0 hero.json, kept verbatim after migration
