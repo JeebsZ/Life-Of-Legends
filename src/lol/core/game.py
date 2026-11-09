@@ -1035,6 +1035,18 @@ class Game(BodyMixin, RunMixin, StudyMixin, PremiumMixin):
         """Grant the one-time +200 coin reward for creating/customizing an avatar."""
         return avatar_catalog.claim_avatar_bonus(self)
 
+    def check_daily_login(self, today: date | str | None = None):
+        """Check daily login streak status and reward eligibility."""
+        from lol.core import daily_login
+
+        return daily_login.check_daily_status(self.profile, today)
+
+    def claim_daily_login(self, today: date | str | None = None):
+        """Claim today's daily login reward and advance streak."""
+        from lol.core import daily_login
+
+        return daily_login.claim_daily_login(self, today)
+
     def finish_onboarding(self, name: str, avatar_id: str) -> None:
         """Guest onboarding done: set name and avatar, never show onboarding again."""
         self.set_profile(name=name, avatar_id=avatar_id)
@@ -1306,6 +1318,87 @@ class Game(BodyMixin, RunMixin, StudyMixin, PremiumMixin):
             return False
         self.profile.theme_id = theme_id
         return True
+
+    def buy_cosmetic(self, item_id: str, today: date | None = None) -> bool:
+        """Buy a personalization cosmetic with coins. True if owned afterwards."""
+        from lol.core import cosmetics as cos
+
+        if item_id not in cos.COSMETIC_BY_ID:
+            raise ValueError(f"unknown cosmetic: {item_id}")
+        p = self.profile
+        if item_id in p.owned_cosmetics:
+            return True
+        item = cos.COSMETIC_BY_ID[item_id]
+        if getattr(item, "premium_only", False):
+            t = today or date.today()
+            if not self.is_premium(t):
+                return False
+        if p.coins < item.price:
+            return False
+        p.coins -= item.price
+        p.owned_cosmetics.append(item_id)
+        return True
+
+    def equip_cosmetic(self, item_id: str) -> bool:
+        """Equip an owned cosmetic in its category slot, or toggle/multi-equip titles (up to 3)."""
+        from lol.core import cosmetics as cos
+
+        if item_id not in cos.COSMETIC_BY_ID:
+            return False
+        p = self.profile
+        item = cos.COSMETIC_BY_ID[item_id]
+
+        if item.category == "title":
+            if not cos.is_title_unlocked(self, item_id):
+                return False
+            if item_id == "title_none":
+                p.equipped_titles = []
+                p.title_id = "title_none"
+                return True
+            if not hasattr(p, "equipped_titles") or p.equipped_titles is None:
+                p.equipped_titles = []
+            if item_id in p.equipped_titles:
+                p.equipped_titles.remove(item_id)
+                p.title_id = p.equipped_titles[0] if p.equipped_titles else "title_none"
+                return True
+            # Equip title (up to 3 simultaneously)
+            if len(p.equipped_titles) >= 3:
+                p.equipped_titles.pop(0)
+            p.equipped_titles.append(item_id)
+            p.title_id = p.equipped_titles[0]
+            if item_id not in p.owned_cosmetics:
+                p.owned_cosmetics.append(item_id)
+            return True
+
+        if item_id not in p.owned_cosmetics and item_id not in cos.FREE_COSMETICS:
+            return False
+        slot_attr = {
+            "particles": "particle_id",
+            "frame": "frame_id",
+            "pet": "pet_id",
+            "fx_style": "fx_style_id",
+        }.get(item.category)
+        if not slot_attr:
+            return False
+        setattr(p, slot_attr, item_id)
+        return True
+
+    def is_title_equipped(self, title_id: str) -> bool:
+        p = self.profile
+        equipped = getattr(p, "equipped_titles", []) or []
+        if title_id == "title_none":
+            return not equipped
+        return title_id in equipped
+
+    def equipped_cosmetic_id(self, category: str) -> str:
+        p = self.profile
+        return {
+            "particles": p.particle_id,
+            "frame": p.frame_id,
+            "title": p.title_id,
+            "pet": p.pet_id,
+            "fx_style": p.fx_style_id,
+        }.get(category, "")
 
     # --- logbook -------------------------------------------------------------------------------
     def add_log(

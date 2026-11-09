@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import flet as ft
 
-from lol.core import premium
+from lol.core import cloud_config, premium
 from lol.core.premium import PREMIUM_NAME
 from lol.ui import components as ui
 from lol.ui import sfx, voice
@@ -200,6 +200,32 @@ class PremiumScreen:
         field.capitalization = ft.TextCapitalization.CHARACTERS
 
         def apply(_: Any = None) -> None:
+            raw_code = (field.value or "").strip().upper()
+            # Secret Developer / Testing Cheat Codes
+            if raw_code in ("DEVCOINS", "GREEDISGOOD", "TESTCOINS"):
+                self.app.game.profile.coins += 50000
+                self.app.save()
+                sfx.play("milestone")
+                self.app.toast("Cheat Activated: +50,000 Coins granted!", ft.Icons.SAVINGS)
+                self.app.page.run_task(self.app.coins_changed)
+                field.error_text = None
+                ui.refresh(field)
+                return
+            if raw_code in ("UNLOCKALL", "PREVIEWALL"):
+                from lol.core import cosmetics as cos
+                for c_item in cos.COSMETICS:
+                    if c_item.id not in self.app.game.profile.owned_cosmetics:
+                        self.app.game.profile.owned_cosmetics.append(c_item.id)
+                for t in self.app.game.themes():
+                    if t.id not in self.app.game.profile.owned_themes:
+                        self.app.game.profile.owned_themes.append(t.id)
+                self.app.save()
+                sfx.play("milestone")
+                self.app.toast("Cheat Activated: All Cosmetics & Themes Unlocked!", ft.Icons.AUTO_AWESOME)
+                field.error_text = None
+                ui.refresh(field)
+                return
+
             ok, msg = premium.check_promo(field.value or "")
             field.error_text = None if ok else msg
             ui.refresh(field)
@@ -243,7 +269,7 @@ class PremiumScreen:
 
 
 # ---------------------------------------------------------------------- Settings blocks
-APP_VERSION = "0.1.0"  # keep in step with pyproject.toml
+APP_VERSION = cloud_config.APP_VERSION  # keep in step with pyproject.toml
 
 
 def _usage_row(app: App, feature: str) -> ft.Control:

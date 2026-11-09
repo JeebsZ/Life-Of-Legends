@@ -26,11 +26,12 @@ if TYPE_CHECKING:
 # key: (label, icon, color role or hex)
 TILES: dict[str, tuple[str, ft.IconData, str]] = {
     "profile": ("Profile", ft.Icons.PERSON, C.PRIMARY),
+    "daily_login": ("Daily Streak", ft.Icons.AUTO_AWESOME, th.C.GOLD),
     "skills": ("Skills", ft.Icons.ACCOUNT_TREE, "#A78BFA"),
     "achievements": ("Achievements", ft.Icons.EMOJI_EVENTS, "#F5C66B"),
     "report": ("Luma Report", ft.Icons.INSIGHTS, "#4FE3F0"),
     "calendar": ("Calendar", ft.Icons.CALENDAR_MONTH, "#5EEAB0"),
-    "bills": ("Bills", ft.Icons.RECEIPT_LONG, "#F5B94A"),
+    "bills": ("Finance & Bills", ft.Icons.ACCOUNT_BALANCE_WALLET, "#F5B94A"),
     "focus": ("Focus Timer", ft.Icons.TIMER, "#FFB347"),
     "templates": ("Templates", ft.Icons.LIBRARY_BOOKS, "#7FB2FF"),
     "logbook": ("Logbook", ft.Icons.BOOK, "#F08CB4"),
@@ -49,12 +50,12 @@ TILES: dict[str, tuple[str, ft.IconData, str]] = {
 }
 MODULE_TILES = {"workout", "sleep", "water", "energy", "insights", "body", "meals", "run"}  # hidden when switched off
 SECTIONS = (
-    ("You", ("profile", "skills", "achievements", "report")),
+    ("You", ("profile", "daily_login", "skills", "achievements", "report")),
     ("Track", ("workout", "run", "sleep", "water", "energy", "body", "meals", "insights")),
     ("Plan & focus", ("bills", "calendar", "focus", "study", "templates", "logbook")),
     ("Data & app", ("backup", "settings", "premium")),
 )
-COMING_SOON = {"achievements"}
+COMING_SOON: set[str] = set()
 SLIDE = 0.18  # slide distance (fraction of the width)
 
 
@@ -63,6 +64,9 @@ def _make(app: App, key: str) -> Any:
     if key == "profile":
         from lol.ui.screens.profile import ProfileScreen
         return ProfileScreen(app)
+    if key == "achievements":
+        from lol.ui.screens.achievements import AchievementsScreen
+        return AchievementsScreen(app)
     if key == "skills":
         from lol.ui.screens.skills import SkillsScreen
         return SkillsScreen(app)
@@ -281,6 +285,10 @@ class MoreScreen:
 
         async def tap(_: Any) -> None:
             await ui.pop(square, 1.1)
+            if key == "daily_login":
+                from lol.ui.daily_login_dialog import prompt_daily_login
+                prompt_daily_login(self.app, force=True)
+                return
             self.open(key)
 
         return ft.Container(

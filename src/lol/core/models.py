@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from lol.core.finance import SavingsGoal
+
 QUEST_KINDS = ("once", "daily")
 BILL_REPEATS = ("none", "weekly", "monthly", "yearly")
 REWARD_KINDS = ("personal", "theme")
@@ -594,6 +596,26 @@ class Profile:
     avatar_customization: AvatarCustomization = field(default_factory=AvatarCustomization)
     avatar_configured: bool = False  # True once the player saves their custom chibi avatar
     avatar_bonus_claimed: bool = False  # True once the +200 coin avatar bonus is claimed
+    owned_cosmetics: list[str] = field(
+        default_factory=lambda: [
+            "particles_auto",
+            "frame_default",
+            "title_none",
+            "pet_none",
+            "fx_default",
+        ]
+    )
+    particle_id: str = "particles_auto"
+    frame_id: str = "frame_default"
+    title_id: str = "title_none"
+    equipped_titles: list[str] = field(default_factory=list)  # up to 3 simultaneously equipped titles
+    pet_id: str = "pet_none"
+    fx_style_id: str = "fx_default"
+    daily_login_streak: int = 0
+    last_login_claim: str = ""  # ISO date string ("YYYY-MM-DD")
+    daily_login_claimed_days: list[int] = field(default_factory=list)
+    currency: str = "₱"  # active currency symbol ("₱", "$", "€", "£", "¥", "₹", "₩", "A$", "C$", "S$")
+    last_seen_changelog: str = ""  # date string "YYYY-MM-DD" when user last saw or dismissed "What's New"
 
 
 # Notification sounds the user can pick (Settings): Sci-Fi pack notify_01..08.
@@ -700,6 +722,10 @@ class SaveData:
     profile: Profile = field(default_factory=Profile)
     quests: list[Quest] = field(default_factory=list)
     bills: list[Bill] = field(default_factory=list)
+    expenses: list[Any] = field(default_factory=list)  # ExpenseEntry list (schema 5 additive)
+    split_bills: list[Any] = field(default_factory=list)  # SplitBill list (schema 5 additive)
+    savings_goals: list[SavingsGoal] = field(default_factory=list)
+    saved_qr_path: str = ""  # Digital bank QR code image path for quick payments
     rewards: list[Reward] = field(default_factory=list)
     logs: list[LogEntry] = field(default_factory=list)
     side_quests: list[SideQuest] = field(default_factory=list)
@@ -724,5 +750,8 @@ class SaveData:
     study_sessions: list[StudySession] = field(default_factory=list)
     study_settings: StudySettings = field(default_factory=StudySettings)
     premium: PremiumState = field(default_factory=PremiumState)  # additive, schema 5
+    star_iron: int = 0  # Star-Iron Ore earned from lifting tonnage (1 kg = 1 ore)
+    exercise_prs: dict[str, float] = field(default_factory=dict)  # exercise_id -> max_weight_kg
+    unlocked_workout_traits: list[str] = field(default_factory=list)  # awakened traits
     next_id: int = 1
     legacy: dict[str, Any] | None = None  # raw v0 hero.json, kept verbatim after migration

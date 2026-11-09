@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import flet as ft
 
+from lol.core import cosmetics as cos
 from lol.core.models import Reward
 from lol.core.premium import PREMIUM_NAME
 from lol.ui import avatars, sfx
@@ -17,12 +18,22 @@ from lol.ui.theme import C, Radius, Size, Space, Type
 if TYPE_CHECKING:
     from lol.ui.app import App
 
+COSMETIC_CAT_ICONS: dict[str, ft.IconData] = {
+    "particles": ft.Icons.AUTO_AWESOME,
+    "frame": ft.Icons.RADIO_BUTTON_CHECKED,
+    "title": ft.Icons.MILITARY_TECH,
+    "pet": ft.Icons.PETS,
+    "fx_style": ft.Icons.BOLT,
+}
+
 
 class RewardsScreen:
     def __init__(self, app: App) -> None:
         self.app = app
         self.tiles: list[ui.RewardTile] = []
         self.theme_tiles: dict[str, ui.RewardTile] = {}
+        self.cosmetic_tiles: dict[str, ui.RewardTile] = {}
+        self.selected_cat: str = "theme"
         self.list = common.screen_list()
         self.view = ft.Container(self.list, expand=True, key="rewards")
         self.fab = ft.FloatingActionButton(icon=ft.Icons.ADD, on_click=self._open_add,
@@ -54,7 +65,11 @@ class RewardsScreen:
             ft.Row(
                 [
                     avatars.bubble(
-                        g.profile.avatar_id, 52, custom=g.profile.avatar_customization
+                        g.profile.avatar_id,
+                        52,
+                        custom=g.profile.avatar_customization,
+                        frame_id=g.profile.frame_id,
+                        pet_id=g.profile.pet_id,
                     ),
                     ft.Column(
                         [
@@ -124,30 +139,128 @@ class RewardsScreen:
             items.append(ui.SectionHeader("Archived", count=len(archived)))
             items += [self._archived_row(r) for r in archived]
 
-        items.append(ui.SectionHeader("Themes"))
-        items.append(common.hint("Change how the whole app looks. Bought once, yours forever. "
-                                 f"Crowned themes need {PREMIUM_NAME} to buy with coins."))
-        theme_grid = []
-        self.theme_tiles = {}
-        for t in g.themes():
-            pal = th.THEMES.get(t.id)
-            if pal is None:
-                continue
-            owned = t.id in g.profile.owned_themes
-            tile = ui.RewardTile(
-                f"{t.name} theme", t.price, coins=coins, kind="theme",
-                swatch=[pal.primary, pal.surface_hi, pal.bg], owned=owned,
-                active=t.id == g.profile.theme_id,
-                on_redeem=lambda tl, tid=t.id: self._buy(tl, tid),
-                on_use=lambda tl, tid=t.id: self._use(tid), data=t.id,
-                crown=t.premium_only,
-                premium_locked=g.theme_status(t, self.app.today()) == "premium",
-                on_premium=lambda tl: self.app.open_sub("premium"))
-            self.theme_tiles[t.id] = tile
-            if not owned:
-                self.tiles.append(tile)
-            theme_grid.append(ft.Container(tile, col=6))
-        items.append(ft.ResponsiveRow(theme_grid, spacing=Space.SM, run_spacing=Space.SM))
+        # --- Personalization Shop (Themes, Background FX, Frames, Titles, Pets, XP & Trail FX) ---
+        items.append(ui.SectionHeader("Personalization Shop"))
+        items.append(
+            common.hint(
+                "Customize themes, background particles, avatar frames, hero titles, "
+                "companions, and XP/GPS trail glow."
+            )
+        )
+        cat_chips: list[ft.Control] = []
+        shop_cats = {"theme": "Themes", **cos.CATEGORIES}
+        for cat_id, cat_label in shop_cats.items():
+            active_cat = cat_id == self.selected_cat
+            cat_chips.append(
+                ft.Container(
+                    ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.PALETTE if cat_id == "theme" else COSMETIC_CAT_ICONS.get(cat_id, ft.Icons.STAR),
+                                size=15,
+                                color=C.ON_PRIMARY if active_cat else C.PRIMARY,
+                            ),
+                            ft.Text(
+                                cat_label,
+                                size=Type.CAPTION,
+                                weight=ft.FontWeight.W_800,
+                                color=C.ON_PRIMARY if active_cat else C.TEXT,
+                            ),
+                        ],
+                        spacing=5,
+                        tight=True,
+                    ),
+                    bgcolor=C.PRIMARY if active_cat else C.SURFACE_HI,
+                    border=ft.Border.all(
+                        1, C.PRIMARY if active_cat else C.a(C.PRIMARY, 0.28)
+                    ),
+                    border_radius=Radius.PILL,
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=7),
+                    on_click=common.with_sound(lambda e, cid=cat_id: self._select_cat(cid)),
+                    ink=True,
+                )
+            )
+        items.append(ft.Row(cat_chips, spacing=Space.XS, wrap=True, run_spacing=Space.XS))
+
+        if self.selected_cat == "theme":
+            items.append(common.hint("Change how the whole app looks. Bought once, yours forever. "
+                                     f"Crowned themes need {PREMIUM_NAME} to buy with coins."))
+            theme_grid = []
+            self.theme_tiles = {}
+            for t in g.themes():
+                pal = th.THEMES.get(t.id)
+                if pal is None:
+                    continue
+                owned = t.id in g.profile.owned_themes
+                theme_title = t.name if t.name.lower().endswith("theme") else f"{t.name} Theme"
+                tile = ui.RewardTile(
+                    theme_title, t.price, coins=coins, kind="theme",
+                    swatch=[pal.primary, pal.surface_hi, pal.bg], owned=owned,
+                    active=t.id == g.profile.theme_id,
+                    on_redeem=lambda tl, tid=t.id: self._buy(tl, tid),
+                    on_use=lambda tl, tid=t.id: self._use(tid), data=t.id,
+                    crown=t.premium_only,
+                    premium_locked=g.theme_status(t, self.app.today()) == "premium",
+                    on_premium=lambda tl: self.app.open_sub("premium"))
+                self.theme_tiles[t.id] = tile
+                if not owned:
+                    self.tiles.append(tile)
+                theme_grid.append(ft.Container(tile, col=6))
+            items.append(ft.ResponsiveRow(theme_grid, spacing=Space.SM, run_spacing=Space.SM))
+        else:
+            cos_grid: list[ft.Control] = []
+            self.cosmetic_tiles = {}
+            equipped_id = g.equipped_cosmetic_id(self.selected_cat)
+            is_title_cat = self.selected_cat == "title"
+            for c_item in cos.items_for_category(self.selected_cat):
+                if is_title_cat:
+                    owned_c = cos.is_title_unlocked(g, c_item.id)
+                    active_c = g.is_title_equipped(c_item.id)
+                else:
+                    owned_c = c_item.id in g.profile.owned_cosmetics or c_item.price == 0
+                    active_c = c_item.id == equipped_id
+                sw = [
+                    c_item.color,
+                    c_item.secondary_color or c_item.color,
+                    th.current().bg,
+                ]
+                label_title = (
+                    f"{c_item.badge_text} {c_item.name}"
+                    if c_item.category == "pet" and c_item.badge_text
+                    else c_item.name
+                )
+                if is_title_cat:
+                    eq_cnt = len(getattr(g.profile, "equipped_titles", []))
+                    if not owned_c:
+                        item_note = f"🔒 {c_item.subtitle}"
+                    elif active_c:
+                        item_note = f"✓ Equipped ({eq_cnt}/3 active)"
+                    else:
+                        item_note = "Unlocked · Tap to equip (up to 3)"
+                else:
+                    item_note = c_item.subtitle
+
+                c_tile = ui.RewardTile(
+                    label_title,
+                    c_item.price,
+                    coins=coins,
+                    kind="theme",
+                    swatch=sw,
+                    owned=owned_c,
+                    active=active_c,
+                    on_redeem=lambda tl, cid=c_item.id: self._buy_cosmetic(tl, cid),
+                    on_use=lambda tl, cid=c_item.id: self._use_cosmetic(cid),
+                    data=c_item.id,
+                    crown=getattr(c_item, "premium_only", False),
+                    premium_locked=g.cosmetic_status(c_item, self.app.today()) == "premium",
+                    on_premium=lambda tl: self.app.open_sub("premium"),
+                    note=item_note,
+                )
+                self.cosmetic_tiles[c_item.id] = c_tile
+                if not owned_c and c_item.price > 0:
+                    self.tiles.append(c_tile)
+                cos_grid.append(ft.Container(c_tile, col=6))
+            items.append(ft.ResponsiveRow(cos_grid, spacing=Space.SM, run_spacing=Space.SM))
         self.list.controls = items
 
     def _refresh(self) -> None:
@@ -191,6 +304,21 @@ class RewardsScreen:
         p = self.app.game.profile
         for tid, tile in self.theme_tiles.items():
             tile.set_owned(tid in p.owned_themes, tid == p.theme_id)
+        eq_id = self.app.game.equipped_cosmetic_id(self.selected_cat)
+        is_title_cat = self.selected_cat == "title"
+        for cid, tile in self.cosmetic_tiles.items():
+            item = cos.COSMETIC_BY_ID.get(cid)
+            if is_title_cat:
+                owned = cos.is_title_unlocked(self.app.game, cid)
+                active = self.app.game.is_title_equipped(cid)
+            else:
+                owned = cid in p.owned_cosmetics or (item is not None and item.price == 0)
+                active = cid == eq_id
+            tile.set_owned(owned, active)
+
+    def _select_cat(self, cat_id: str) -> None:
+        self.selected_cat = cat_id
+        self._refresh()
 
     def _coins_spent(self, tile: ui.RewardTile) -> None:
         coins = self.app.game.profile.coins
@@ -220,7 +348,7 @@ class RewardsScreen:
     async def _buy(self, tile: ui.RewardTile, theme_id: str) -> bool:
         t = next(x for x in self.app.game.themes() if x.id == theme_id)
         ok = await common.confirm(self.app.page, f"Unlock {t.name}?",
-                                  f"Spend {t.price:,} coins on the {t.name} theme. "
+                                  f"Spend {t.price:,} coins on {t.name}. "
                                   "You can switch back any time.", "Unlock")
         if not ok or not self.app.game.buy_theme(theme_id, self.app.today()):
             return False
@@ -235,6 +363,54 @@ class RewardsScreen:
             return
         self.app.save()
         th.apply_theme(self.app.page, theme_id)  # restyles this screen via callback
+
+    async def _buy_cosmetic(self, tile: ui.RewardTile, item_id: str) -> bool:
+        item = cos.COSMETIC_BY_ID.get(item_id)
+        if item is None:
+            return False
+        if (
+            getattr(item, "premium_only", False)
+            and self.app.game.cosmetic_status(item, self.app.today()) == "premium"
+        ):
+            self.app.open_sub("premium")
+            return False
+        cat_name = cos.CATEGORIES.get(item.category, "Cosmetic")
+        ok = await common.confirm(
+            self.app.page,
+            f"Unlock {item.name}?",
+            f"Spend {item.price:,} coins on {item.name} ({cat_name}).\n{item.subtitle}",
+            "Unlock",
+        )
+        if not ok or not self.app.game.buy_cosmetic(item_id):
+            return False
+        self.app.game.equip_cosmetic(item_id)
+        self.app.save()
+        sfx.play("purchase")
+        self._coins_spent(tile)
+        self.app.refresh_profile()
+        self.restyle()
+        self.app.page.run_task(self.app.reveal, item.name, f"{cat_name} unlocked & equipped")
+        return True
+
+    def _use_cosmetic(self, item_id: str) -> None:
+        item = cos.COSMETIC_BY_ID.get(item_id)
+        was_equipped = self.app.game.is_title_equipped(item_id) if (item and item.category == "title") else False
+        if not self.app.game.equip_cosmetic(item_id):
+            if item and item.category == "title":
+                self.app.toast(f"Locked: {item.subtitle}", ft.Icons.LOCK)
+            return
+        self.app.save()
+        sfx.play("tap")
+        self.app.refresh_profile()
+        self.restyle()
+        if item is not None:
+            if item.category == "title":
+                if was_equipped:
+                    self.app.toast(f"Unequipped title '{item.name}'", ft.Icons.REMOVE_CIRCLE_OUTLINE)
+                else:
+                    self.app.toast(f"Equipped title '{item.name}'", ft.Icons.CHECK_CIRCLE)
+            else:
+                self.app.toast(f"Equipped {item.name}", ft.Icons.CHECK_CIRCLE_OUTLINE)
 
     async def _delete(self, reward_id: str) -> None:
         await ui.buzz("medium")

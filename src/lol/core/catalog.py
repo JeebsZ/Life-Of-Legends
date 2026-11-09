@@ -27,13 +27,22 @@ PATH_IDS: tuple[str, ...] = tuple(p.id for p in PATHS)
 DEFAULT_THEME = "arcane"  # new saves start here
 FREE_THEMES: tuple[str, ...] = ("arcane", "ember", "rose")  # every save owns these
 THEMES: list[ThemeDef] = [
-    ThemeDef("arcane", "Arcane", 0),
-    ThemeDef("ember", "Ember", 0),  # free: the default before Arcane, so old saves keep it
-    ThemeDef("rose", "Rose Arcana", 0),  # free for everyone, never gated
+    ThemeDef("arcane", "Default Theme", 0),
+    ThemeDef("ember", "Ember Theme", 0),  # free: the default before Arcane, so old saves keep it
+    ThemeDef("rose", "Rose Theme", 0),  # free for everyone, never gated
+    # Coin-unlockable themes for everyone:
+    ThemeDef("matcha", "Matcha Theme", 250),
+    ThemeDef("lavender", "Lavender Theme", 250),
+    ThemeDef("sakura", "Sakura Theme", 300),
+    ThemeDef("cyber", "Cyber Theme", 350),
+    ThemeDef("solar", "Solar Theme", 400),
+    ThemeDef("crimson", "Bloodmoon Theme", 450),
+    ThemeDef("aurora", "Aurora Theme", 500),
+    ThemeDef("abyss", "Abyssal Theme", 600),
     # premium-only: Legends+ unlocks the right to buy these with coins (never grants them)
-    ThemeDef("ocean", "Ocean", 300, premium_only=True),
-    ThemeDef("forest", "Forest", 300, premium_only=True),
-    ThemeDef("royal", "Royal", 600, premium_only=True),
+    ThemeDef("ocean", "Ocean Theme", 300, premium_only=True),
+    ThemeDef("forest", "Forest Theme", 300, premium_only=True),
+    ThemeDef("royal", "Royal Theme", 600, premium_only=True),
 ]
 THEME_PRICES: dict[str, int] = {t.id: t.price for t in THEMES}
 THEME_BY_ID: dict[str, ThemeDef] = {t.id: t for t in THEMES}

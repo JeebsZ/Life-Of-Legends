@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 import flet as ft
 import flet.canvas as cv
 
+from lol.core import cosmetics as cos
 from lol.core import premium
 from lol.core import run as rcore
 from lol.core.adventure import (
@@ -675,7 +676,7 @@ class RunScreen:
                 self.app.page.run_task(self._check_gps)
             self._refresh()
 
-        return common.card(ft.Column([
+        rows: list[ft.Control] = [
             common.switch_row("Keep screen awake", "Keep display on while viewing Run (tracking "
                               "also continues with screen off or in background)", s.keep_awake,
                               awake, icon=ft.Icons.SCREEN_LOCK_PORTRAIT),
@@ -684,12 +685,18 @@ class RunScreen:
                               icon=ft.Icons.RECORD_VOICE_OVER),
             common.segmented([(k, CUE_LABELS[k]) for k in CUE_EVERY], s.cue_every,
                              on_change=every),
-            common.switch_row("Simulate GPS route (BlueStacks / Demo)",
-                              "Replay a simulated outdoor loop to test map & wild mob spawns on "
-                              "emulators or indoors",
-                              bool(getattr(self.gps, "fake", False)), toggle_sim_gps,
-                              icon=ft.Icons.EXPLORE),
-        ], spacing=Space.SM, tight=True))
+        ]
+        if g.dev_allowed():
+            rows.append(
+                common.switch_row(
+                    "Simulate GPS route (Dev Only)",
+                    "Replay a simulated outdoor loop to test map & wild mob spawns (no XP or coins)",
+                    bool(getattr(self.gps, "fake", False)),
+                    toggle_sim_gps,
+                    icon=ft.Icons.EXPLORE,
+                )
+            )
+        return common.card(ft.Column(rows, spacing=Space.SM, tight=True))
 
     def _body_card(self) -> ft.Control:
         body = self.app.game.run_body(self.app.today())
@@ -1478,11 +1485,13 @@ class RunScreen:
         segs = tr.route()
         total = sum(len(s) for s in segs)
         step = max(1, math.ceil(total / LIVE_MAP_POINTS))
+        fx_item = cos.get_cosmetic(self.app.game.profile.fx_style_id, "fx_style")
+        poly_color = fx_item.color if fx_item.id != "fx_default" else ROUTE_COLOR
         lines = []
         for seg in segs:
             pts = seg[::step] + ([seg[-1]] if (len(seg) - 1) % step else [])
             lines.append(fm.PolylineMarker(
-                coordinates=[fm.MapLatitudeLongitude(*p) for p in pts], color=ROUTE_COLOR,
+                coordinates=[fm.MapLatitudeLongitude(*p) for p in pts], color=poly_color,
                 stroke_width=5, border_color=C.a("#000000", 0.35), border_stroke_width=1.5))
         poly_layer = self.live_poly or self._polyline_layer
         if poly_layer is not None:
@@ -1722,13 +1731,17 @@ class RunScreen:
         all_events = []
         coins_granted_total = 0
         today = self.app.today()
+        is_sim = bool(getattr(self.gps, "fake", False))
         for _ in range(steps):
             evs = self.adventure_engine.update_tick(step_dt, speed_kmh, step_dist)
             for ev in evs:
                 if ev.event_type == EventType.CREATURE_DEFEATED and ev.coins_gained > 0:
-                    granted = self.app.game.award_adventure_coins(ev.coins_gained, today)
-                    ev.coins_gained = granted
-                    coins_granted_total += granted
+                    if is_sim:
+                        ev.coins_gained = 0
+                    else:
+                        granted = self.app.game.award_adventure_coins(ev.coins_gained, today)
+                        ev.coins_gained = granted
+                        coins_granted_total += granted
             all_events.extend(evs)
         bg_alert_msg: str | None = None
         if crossed_km or any(ev.event_type == EventType.MILESTONE_SURGE for ev in all_events):
@@ -1801,15 +1814,21 @@ class RunScreen:
             return
         self._finish_open = True
         await ui.pop(self.b_finish)
+        is_sim = bool(getattr(self.gps, "fake", False))
         short = tr.distance_m < MIN_LOG_M
         shown = (f"{self._steps_now():,} steps (est.)" if self.tracking == "basic"
                  else f"{km(tr.distance_m)} km")
         body = [common.hint(f"{shown} · {rcore.fmt_duration(tr.moving_s)} "
-                            "moving" + (" - too short to save." if short else "."))]
-        if not short:
+                            "moving" + (" · Demo GPS (no XP/coins)." if is_sim
+                                        else " - too short to save." if short else "."))]
+        if not short and not is_sim:
             body.append(ft.Row([common.primary_button(
                 "Finish & save", lambda e: self._close_then(sheet, self._save),
                 icon=ft.Icons.CHECK)]))
+        elif is_sim:
+            body.append(ft.Row([common.primary_button(
+                "End demo run", lambda e: self._close_then(sheet, self._save),
+                icon=ft.Icons.STOP_CIRCLE_OUTLINED)]))
         body.append(ft.Row([common.secondary_button(
             "Keep going", lambda e: self._close_then(sheet, self._noop),
             icon=ft.Icons.PLAY_ARROW),
@@ -1861,7 +1880,15 @@ class RunScreen:
         app, g, tr = self.app, self.app.game, self.tracker
         if tr is None:
             return
+        is_sim = bool(getattr(self.gps, "fake", False))
         await self._stop_tracking()
+        if is_sim:
+            self.tracker, self.phase = None, "pre"
+            sfx.play("tab_close")
+            app.toast("Demo GPS run ended (simulated runs do not award XP or coins).",
+                      ft.Icons.EXPLORE)
+            self._refresh()
+            return
         now = self.gps.now()
         today = app.today()
         body = g.run_body(today)

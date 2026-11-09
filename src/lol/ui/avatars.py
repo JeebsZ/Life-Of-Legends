@@ -15,8 +15,10 @@ from typing import TYPE_CHECKING, Any
 import flet as ft
 
 from lol.core import avatar_catalog
+from lol.core import cosmetics as cos
 from lol.core.models import AvatarCustomization
 from lol.ui import sfx
+from lol.ui import theme as th
 from lol.ui.theme import C, Motion, Radius, Size, Space, Type
 
 if TYPE_CHECKING:
@@ -61,13 +63,20 @@ def _mounted_page(ctrl: ft.Control) -> ft.Page | None:
 
 
 class AvatarView(ft.Container):
-    """Layered 256x256 pixel-art chibi character renderer."""
+    """Layered 256x256 pixel-art chibi character renderer (with optional companion badge)."""
 
-    def __init__(self, custom: AvatarCustomization | None = None, size: int = 64) -> None:
+    def __init__(
+        self,
+        custom: AvatarCustomization | None = None,
+        size: int = 64,
+        *,
+        pet_id: str | None = None,
+    ) -> None:
         self.size = size
         self.custom = avatar_catalog.sanitize(custom)
+        self.pet_id = pet_id
         self._stack = ft.Stack([], width=size, height=size)
-        self.set_custom(self.custom)
+        self.set_custom(self.custom, pet_id=pet_id)
         super().__init__(
             self._stack,
             width=size,
@@ -77,9 +86,16 @@ class AvatarView(ft.Container):
             animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK),
         )
 
-    def set_custom(self, custom: AvatarCustomization | None) -> None:
+    def set_custom(
+        self,
+        custom: AvatarCustomization | None,
+        *,
+        pet_id: str | None = None,
+    ) -> None:
         self.custom = avatar_catalog.sanitize(custom)
-        self._stack.controls = [
+        if pet_id is not None:
+            self.pet_id = pet_id
+        layers: list[ft.Control] = [
             ft.Image(
                 src=p,
                 width=self.size,
@@ -89,6 +105,53 @@ class AvatarView(ft.Container):
             )
             for p in avatar_catalog.layer_paths(self.custom)
         ]
+        if self.pet_id and self.pet_id != "pet_none":
+            pet = cos.get_cosmetic(self.pet_id, "pet")
+            if pet.badge_text:
+                badge_sz = max(14, round(self.size * 0.28))
+                layers.append(
+                    ft.Container(
+                        ft.Text(
+                            pet.badge_text,
+                            size=max(10, round(self.size * 0.20)),
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        width=badge_sz,
+                        height=badge_sz,
+                        border_radius=badge_sz / 2,
+                        bgcolor=C.a(pet.color, 0.30),
+                        border=ft.Border.all(1.0, C.a(pet.color, 0.85)),
+                        alignment=ft.Alignment.CENTER,
+                        right=max(1, round(self.size * 0.04)),
+                        bottom=max(1, round(self.size * 0.04)),
+                    )
+                )
+        self._stack.controls = layers
+
+
+def _frame_styles(
+    size: int,
+    ring: bool,
+    frame_id: str | None,
+) -> tuple[str, float, ft.Border | None, list[ft.BoxShadow] | ft.BoxShadow]:
+    """Compute (bgcolor, border_w, border, shadow) for an avatar bubble given frame_id."""
+    frame = cos.get_cosmetic(frame_id, "frame") if frame_id else cos.get_cosmetic("frame_default", "frame")
+    if frame.id == "frame_default":
+        col = th.current().primary
+        border_w = round(max(1.5, size / 24), 1) if ring else 0.0
+        border = ft.Border.all(border_w, C.a(col, 0.80)) if ring else None
+        shadow: list[ft.BoxShadow] | ft.BoxShadow = ft.BoxShadow(blur_radius=size / 3, color=C.a(col, 0.30))
+        return C.a(col, 0.18), border_w, border, shadow
+
+    col = frame.color
+    sec = frame.secondary_color or col
+    border_w = round(max(2.2, size / 18), 1) if ring else 0.0
+    border = ft.Border.all(border_w, C.a(col, 0.92)) if ring else None
+    shadow = [
+        ft.BoxShadow(blur_radius=size / 2.4, spread_radius=1.0, color=C.a(col, 0.50)),
+        ft.BoxShadow(blur_radius=size / 1.6, spread_radius=0.5, color=C.a(sec, 0.32)),
+    ]
+    return C.a(col, 0.22), border_w, border, shadow
 
 
 def bubble(
@@ -97,20 +160,31 @@ def bubble(
     *,
     ring: bool = True,
     custom: AvatarCustomization | None = None,
+    frame_id: str | None = None,
+    pet_id: str | None = None,
 ) -> ft.Container:
-    """Round avatar: tinted disc, colored ring and layered chibi AvatarView."""
-    a = get(avatar_id)
-    inner_size = max(16, int(size * 0.92))
+    """Round avatar: theme/frame-tinted disc, ring and circular-clipped chibi AvatarView."""
+    _ = get(avatar_id)
+    bg_col, border_w, border, shadow = _frame_styles(size, ring, frame_id)
+    inner_size = max(16, round(size - border_w * 2))
+    inner_clip = ft.Container(
+        AvatarView(custom, size=inner_size, pet_id=pet_id),
+        width=inner_size,
+        height=inner_size,
+        border_radius=inner_size / 2,
+        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        alignment=ft.Alignment.BOTTOM_CENTER,
+    )
     return ft.Container(
-        AvatarView(custom, size=inner_size),
+        inner_clip,
         width=size,
         height=size,
         border_radius=size / 2,
         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
         alignment=ft.Alignment.CENTER,
-        bgcolor=C.a(a.color, 0.18),
-        border=ft.Border.all(max(1.5, size / 28), C.a(a.color, 0.75)) if ring else None,
-        shadow=ft.BoxShadow(blur_radius=size / 3, color=C.a(a.color, 0.30)),
+        bgcolor=bg_col,
+        border=border,
+        shadow=shadow,
         animate=Motion.anim(Motion.FADE_MS),
         scale=1,
         animate_scale=Motion.anim(Motion.POP_MS * 2, Motion.BACK),
@@ -122,18 +196,31 @@ def restyle_bubble(
     avatar_id: str | None,
     *,
     custom: AvatarCustomization | None = None,
+    frame_id: str | None = None,
+    pet_id: str | None = None,
 ) -> None:
-    """Point an existing bubble() at another avatar/customization in place."""
+    """Point an existing bubble() at another avatar/customization/frame/pet and refresh colors in place."""
     a = get(avatar_id)
     size = ctrl.width or 40
+    ring = ctrl.border is not None
+    bg_col, _border_w, border, shadow = _frame_styles(int(size), ring, frame_id)
     if isinstance(ctrl.content, AvatarView):
-        ctrl.content.set_custom(custom if custom is not None else ctrl.content.custom)
+        ctrl.content.set_custom(
+            custom if custom is not None else ctrl.content.custom,
+            pet_id=pet_id,
+        )
+    elif isinstance(ctrl.content, ft.Container) and isinstance(ctrl.content.content, AvatarView):
+        av_view = ctrl.content.content
+        av_view.set_custom(
+            custom if custom is not None else av_view.custom,
+            pet_id=pet_id,
+        )
     elif isinstance(ctrl.content, ft.Icon):
-        ctrl.content.icon, ctrl.content.color = a.icon, a.color
-    ctrl.bgcolor = C.a(a.color, 0.18)
-    if ctrl.border is not None:
-        ctrl.border = ft.Border.all(max(1.5, size / 28), C.a(a.color, 0.75))
-    ctrl.shadow = ft.BoxShadow(blur_radius=size / 3, color=C.a(a.color, 0.30))
+        ctrl.content.icon, ctrl.content.color = a.icon, th.current().primary
+    ctrl.bgcolor = bg_col
+    if ring:
+        ctrl.border = border
+    ctrl.shadow = shadow
 
 
 class AvatarPicker(ft.Container):
@@ -268,9 +355,9 @@ class CharacterCustomizer(ft.Container):
 
         self.tab_row = ft.Row(
             [],
-            scroll=ft.ScrollMode.AUTO,
+            scroll=ft.ScrollMode.HIDDEN,
             spacing=Space.SM,
-             vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
         self.item_grid = ft.Row(
             [],

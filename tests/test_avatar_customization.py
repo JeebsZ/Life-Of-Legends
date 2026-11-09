@@ -3,12 +3,23 @@ randomizer, +200 coin bonus claim, and save/load persistence."""
 
 from pathlib import Path
 
-from lol.core import avatar_catalog
+import flet as ft
+import pytest
+
+from lol.core import avatar_catalog, update_checker
+from lol.core import cosmetics as cos
 from lol.core.game import Game
 from lol.core.models import AvatarCustomization
-from lol.ui import avatars
+from lol.ui import ambient, avatars
+from lol.ui import components as ui
+from lol.ui import theme as th
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "src" / "assets"
+
+
+@pytest.fixture(autouse=True)
+def _isolated_storage(tmp_path, monkeypatch):
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
 
 
 def test_all_catalog_assets_exist_on_disk():
@@ -160,10 +171,12 @@ def test_avatar_view_and_character_customizer_ui():
     assert len(view._stack.controls) == len(avatar_catalog.layer_paths(custom))
 
     b = avatars.bubble("a2", 48, custom=custom)
-    assert isinstance(b.content, avatars.AvatarView)
+    assert isinstance(b.content, ft.Container)
+    assert b.content.clip_behavior == ft.ClipBehavior.HARD_EDGE
+    assert isinstance(b.content.content, avatars.AvatarView)
     new_custom = AvatarCustomization(hair="", clothes="Clothes2", makeups=["Makeup2", "Makeup4"])
     avatars.restyle_bubble(b, "a3", custom=new_custom)
-    assert b.content.custom == new_custom
+    assert b.content.content.custom == new_custom
 
     changes: list[AvatarCustomization] = []
     limit_msgs: list[str] = []
@@ -183,5 +196,88 @@ def test_avatar_view_and_character_customizer_ui():
     # Randomize updates custom and triggers on_change
     editor._on_randomize()
     assert len(changes) >= 3
+
+
+def test_avatar_bubble_follows_theme_color():
+    prev_id = th.current().id
+    try:
+        for tid, pal in th.THEMES.items():
+            th._current[0] = tid
+            b = avatars.bubble("a1", 40)
+            assert pal.primary.lstrip("#").lower() in (b.bgcolor or "").lower()
+    finally:
+        th._current[0] = prev_id
+
+
+def test_arcane_nav_bar_has_valid_height_and_no_positioned_crash():
+    nav = ui.ArcaneNavBar(0)
+    assert nav.height is not None and nav.height >= ui.NAV_H
+    assert nav.content is not None
+    assert getattr(nav.content, "top", None) is None
+    assert getattr(nav.content, "bottom", None) is None
+
+
+def test_store_update_checker_version_parsing_and_extraction():
+    assert update_checker.is_newer_version("0.1.3", "0.1.4")
+    assert update_checker.is_newer_version("0.1.3", "0.2.0")
+    assert update_checker.is_newer_version("0.1.3", "1.0.0")
+    assert not update_checker.is_newer_version("0.1.3", "0.1.3")
+    assert not update_checker.is_newer_version("0.1.3", "0.1.2")
+
+    html_sample = 'AF_initDataCallback({key: "ds:5", data: [[["0.1.5"]]]});'
+    assert update_checker.extract_play_store_version(html_sample) == "0.1.5"
+    json_sample = '{"latest_version": "0.2.1"}'
+    assert update_checker.extract_play_store_version(json_sample) == "0.2.1"
+
+
+def test_cosmetics_shop_buy_equip_and_persistence(tmp_path: Path):
+    save_file = tmp_path / "save_cosmetics.json"
+    g = Game.load(save_file)
+    g.profile.coins = 5000
+
+    for cat in ("particles", "frame", "pet", "fx_style"):
+        items = cos.items_for_category(cat)
+        assert len(items) >= 6
+        paid = next(i for i in items if i.price > 0)
+        assert not g.equip_cosmetic(paid.id)
+        assert g.buy_cosmetic(paid.id)
+        assert paid.id in g.profile.owned_cosmetics
+        assert g.equip_cosmetic(paid.id)
+        assert g.equipped_cosmetic_id(cat) == paid.id
+
+    # Title category is achievement-unlocked
+    title_items = cos.items_for_category("title")
+    assert len(title_items) >= 6
+    g.profile.owned_cosmetics.append("title_beta")
+    assert g.equip_cosmetic("title_beta")
+    assert "title_beta" in g.profile.equipped_titles
+
+    g.save(save_file)
+    g2 = Game.load(save_file)
+    for cat in cos.CATEGORIES:
+        assert g2.equipped_cosmetic_id(cat) == g.equipped_cosmetic_id(cat)
+
+
+def test_mindspace_particle_modes_and_bubble_frames_pets():
+    space = ambient.MindSpace()
+    for p_item in cos.items_for_category("particles"):
+        space.set_particle_style(p_item.id)
+        for m in space._motes[:3]:
+            m.step(2.5, 375.0, 812.0)
+        assert len(space._motes) > 0
+
+    b = avatars.bubble(
+        "a1",
+        52,
+        custom=AvatarCustomization(),
+        frame_id="frame_gold",
+        pet_id="pet_slime",
+    )
+    assert isinstance(b.shadow, list)
+    av_view = b.content.content
+    assert isinstance(av_view, avatars.AvatarView)
+    assert len(av_view._stack.controls) == len(avatar_catalog.layer_paths(av_view.custom)) + 1
+
+
 
 

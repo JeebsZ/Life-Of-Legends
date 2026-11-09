@@ -14,13 +14,20 @@ from typing import TYPE_CHECKING, Any
 
 import flet as ft
 
+from lol.core import exercise_catalog as ec
 from lol.core.game import REST_TIMER_PRESETS
 from lol.core.models import ExerciseEntry, SetEntry, WorkoutSession
+from lol.core.workout_engine import (
+    FORGE_RECIPES,
+    GUARDIAN_TEMPLATES,
+    REST_SAGE_LINES,
+    spawn_guardian_for_target_volume,
+)
+from lol.ui import avatars, sfx
 from lol.ui import components as ui
-from lol.ui import sfx
 from lol.ui import theme as th
 from lol.ui.screens import common
-from lol.ui.theme import C, Radius, Size, Space, Type
+from lol.ui.theme import C, Motion, Radius, Size, Space, Type
 
 if TYPE_CHECKING:
     from lol.ui.app import App
@@ -122,12 +129,16 @@ class WorkoutScreen:
             common.card(ft.Column([
                 ft.Row([stat(str(stats["sessions"]), "sessions today"),
                         stat(f"{stats['minutes']}", "minutes"),
-                        stat(f"{stats['xp_left']}", "XP left today")]),
-                ft.Row([common.primary_button("Quick log", self.open_quick,
-                                              icon=ft.Icons.BOLT),
-                        common.secondary_button("Strength", lambda e: self.open_builder(None),
-                                                icon=ft.Icons.FITNESS_CENTER)],
+                        stat(f"{g.data.star_iron:,}", "Star-Iron Ore")]),
+                ft.Row([common.primary_button("Start workout", lambda e: self.open_builder(None),
+                                              icon=ft.Icons.FITNESS_CENTER),
+                        common.secondary_button("Quick log", self.open_quick,
+                                                icon=ft.Icons.BOLT)],
                        spacing=Space.SM),
+                ft.Row([
+                    common.secondary_button("Star-Iron Forge", self._open_forge,
+                                            icon=ft.Icons.HARDWARE),
+                ]),
             ], spacing=Space.MD, tight=True)),
             self._rest_card(),
         ]
@@ -336,9 +347,221 @@ class WorkoutScreen:
         ])
 
     # ------------------------------------------------------------------ session builder
-    def open_builder(self, draft: WorkoutSession | None, *, heading: str = "Strength session"
+    def _open_exercise_picker(self, on_select: Any) -> None:
+        """Hevy-style exercise catalog with muscle filters, search, and (i) tutorials."""
+        app = self.app
+        search_field = common.text_field("Search exercises (e.g. Bench, Squat)")
+        active_muscle = ["All"]
+        active_equip = ["All"]
+        results_col = ft.Column(spacing=Space.XS, tight=True, scroll=ft.ScrollMode.ADAPTIVE)
+
+        muscles = ["All", "Chest", "Back", "Legs", "Shoulders", "Arms", "Core"]
+
+        def show_tutorial(ex: ec.Exercise) -> None:
+            tut_items: list[ft.Control] = [
+                ft.Row([
+                    ft.Icon(ft.Icons.FITNESS_CENTER, color=C.PRIMARY, size=24),
+                    ft.Column([
+                        ft.Text(ex.name, size=Type.TITLE, weight=ft.FontWeight.W_900, color=C.TEXT),
+                        common.hint(f"Muscle: {ex.muscle} · Equipment: {ex.equipment}"),
+                    ], spacing=2, expand=True, tight=True),
+                ], spacing=Space.SM),
+                ft.Divider(height=1, color=C.OUTLINE),
+                ft.Text("Step-by-Step Instructions", size=Type.BODY, weight=ft.FontWeight.BOLD, color=C.PRIMARY),
+            ]
+            for step_idx, step_txt in enumerate(ex.instructions, 1):
+                tut_items.append(
+                    ft.Row([
+                        ft.Container(
+                            ft.Text(str(step_idx), size=11, weight=ft.FontWeight.BOLD, color=C.ON_PRIMARY),
+                            width=22, height=22, border_radius=11, bgcolor=C.PRIMARY,
+                            alignment=ft.Alignment.CENTER,
+                        ),
+                        ft.Text(step_txt, size=Type.BODY, color=C.TEXT, expand=True),
+                    ], spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.START)
+                )
+            if ex.secondary_muscles:
+                tut_items.append(
+                    common.hint(f"Secondary muscles: {', '.join(ex.secondary_muscles)}")
+                )
+            common.open_sheet(app.page, "Exercise Guide", tut_items)
+
+        def refresh_list() -> None:
+            m = active_muscle[0] if active_muscle[0] != "All" else None
+            eq = active_equip[0] if active_equip[0] != "All" else None
+            q = (search_field.value or "").strip()
+            items = ec.filter_exercises(muscle=m, equipment=eq, query=q)
+            rows: list[ft.Control] = []
+            if not items:
+                rows.append(ft.Container(common.hint("No matching exercises found"), alignment=ft.Alignment.CENTER))
+            for ex in items:
+                def pick(_: Any, name=ex.name) -> None:
+                    common.close(sheet)
+                    on_select(name)
+
+                rows.append(
+                    common.card(
+                        ft.Row([
+                            ft.Icon(ft.Icons.FITNESS_CENTER, color=C.PRIMARY, size=22),
+                            ft.Column([
+                                ft.Text(ex.name, size=Type.BODY, weight=ft.FontWeight.W_700, color=C.TEXT),
+                                common.hint(f"{ex.muscle} · {ex.equipment}"),
+                            ], spacing=0, expand=True, tight=True),
+                            ft.IconButton(
+                                ft.Icons.INFO_OUTLINE,
+                                icon_color=C.PRIMARY,
+                                tooltip="How to do this exercise",
+                                on_click=lambda e, ex=ex: show_tutorial(ex),
+                            ),
+                            ft.IconButton(
+                                ft.Icons.ADD_CIRCLE_OUTLINE,
+                                icon_color=C.ACCENT,
+                                tooltip="Add to workout",
+                                on_click=pick,
+                            ),
+                        ], spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                        padding=ft.Padding.symmetric(horizontal=Space.MD, vertical=Space.XS),
+                    )
+                )
+            results_col.controls = rows
+            ui.refresh(results_col)
+
+        search_field.on_change = lambda e: refresh_list()
+
+        muscle_pills = ft.Row([
+            ft.Container(
+                ft.Text(m, size=Type.CAPTION, weight=ft.FontWeight.BOLD,
+                        color=C.ON_PRIMARY if m == active_muscle[0] else C.TEXT),
+                bgcolor=C.PRIMARY if m == active_muscle[0] else C.SURFACE_HI,
+                border_radius=Radius.PILL,
+                padding=ft.Padding.symmetric(horizontal=10, vertical=5),
+                on_click=lambda e, m=m: set_muscle(m),
+                ink=True,
+            )
+            for m in muscles
+        ], scroll=ft.ScrollMode.ADAPTIVE, spacing=Space.XS)
+
+        def set_muscle(m: str) -> None:
+            sfx.play("toggle")
+            active_muscle[0] = m
+            for pill, target_m in zip(muscle_pills.controls, muscles):
+                active = target_m == m
+                pill.bgcolor = C.PRIMARY if active else C.SURFACE_HI
+                pill.content.color = C.ON_PRIMARY if active else C.TEXT
+            ui.refresh(muscle_pills)
+            refresh_list()
+
+        refresh_list()
+        sheet = common.open_sheet(app.page, "Select Exercise", [
+            search_field,
+            muscle_pills,
+            ft.Container(results_col, height=360),
+        ])
+
+    def _open_forge(self, _: Any = None) -> None:
+        """Tempest Star-Iron Forge: spend lifted volume ore to forge relics, coins & traits."""
+        app, g = self.app, self.app.game
+        ore_text = ft.Text(
+            f"⛏️ {g.data.star_iron:,} Star-Iron Ore",
+            size=Type.TITLE,
+            weight=ft.FontWeight.W_900,
+            color="#4FE3F0",
+        )
+        recipe_col = ft.Column(spacing=Space.SM, tight=True)
+
+        def paint_recipes() -> None:
+            ore_text.value = f"⛏️ {g.data.star_iron:,} Star-Iron Ore"
+            cards: list[ft.Control] = []
+            for r in FORGE_RECIPES:
+                forged = r.trait_id in g.data.unlocked_workout_traits
+                can_afford = g.data.star_iron >= r.cost_ore and not forged
+
+                def craft(_: Any, rec=r) -> None:
+                    if g.data.star_iron < rec.cost_ore or rec.trait_id in g.data.unlocked_workout_traits:
+                        sfx.play("error_soft")
+                        return
+                    g.data.star_iron -= rec.cost_ore
+                    g.data.unlocked_workout_traits.append(rec.trait_id)
+                    g.profile.coins += rec.reward_coins
+                    g.profile.xp += rec.reward_xp
+                    app.save()
+                    sfx.play("skill_acquired", 0.85)
+                    app.juice(rec.color, strength=1.0)
+                    if app.page:
+                        app.page.run_task(app.coins_changed)
+                        app.page.run_task(app.reveal, rec.name, f"{rec.trait_id} Forged! +{rec.reward_coins} Coins")
+                    paint_recipes()
+                    ui.refresh(ore_text, recipe_col)
+                    self._refresh()
+
+                btn_label = "Forged ✓" if forged else f"Forge ({r.cost_ore:,} Ore)"
+                btn = ft.Container(
+                    ft.Text(
+                        btn_label,
+                        size=Type.CAPTION,
+                        weight=ft.FontWeight.W_800,
+                        color=C.SUCCESS if forged else (C.ON_PRIMARY if can_afford else C.TEXT_DIM),
+                    ),
+                    bgcolor=C.a(C.SUCCESS, 0.16) if forged else (r.color if can_afford else C.SURFACE_HI),
+                    border_radius=Radius.PILL,
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                    on_click=craft if can_afford else None,
+                    ink=can_afford,
+                )
+                cards.append(
+                    common.card(
+                        ft.Row(
+                            [
+                                ft.Container(
+                                    ft.Icon(ft.Icons.SHIELD_MOON, color=r.color, size=24),
+                                    width=44,
+                                    height=44,
+                                    border_radius=22,
+                                    bgcolor=C.a(r.color, 0.16),
+                                    alignment=ft.Alignment.CENTER,
+                                ),
+                                ft.Column(
+                                    [
+                                        ft.Text(r.name, size=Type.BODY, weight=ft.FontWeight.W_800, color=C.TEXT),
+                                        ft.Text(r.desc, size=Type.CAPTION, color=C.TEXT_DIM),
+                                    ],
+                                    spacing=2,
+                                    expand=True,
+                                    tight=True,
+                                ),
+                                btn,
+                            ],
+                            spacing=Space.SM,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        padding=Space.SM,
+                    )
+                )
+            recipe_col.controls = cards
+
+        paint_recipes()
+        common.open_sheet(
+            app.page,
+            "Star-Iron Forge",
+            [
+                common.card(
+                    ft.Column(
+                        [
+                            ore_text,
+                            common.hint("1 kg lifted = 1 Ore. Craft relics for permanent traits & coins."),
+                        ],
+                        spacing=4,
+                        tight=True,
+                    ),
+                    padding=Space.MD,
+                ),
+                recipe_col,
+            ],
+        )
+
+    def open_builder(self, draft: WorkoutSession | None, *, heading: str = "Labyrinth Raid Session"
                      ) -> None:
-        """Exercises + sets editor. `draft`: a copy / routine draft to start from."""
+        """Interactive Labyrinth Boss Raid + Exercise/Set Logger with Strike buttons & Rest Recovery."""
         app, g = self.app, self.app.game
         unit = "kg"
         if draft and draft.exercises and draft.exercises[0].sets:
@@ -349,17 +572,365 @@ class WorkoutScreen:
             "effort": draft.effort if draft else 6,
             "link": f"p:{draft.path_id}" if draft and draft.path_id != "warrior" else "none",
             "unit": unit,
-            # editable copy: [{"name": str, "sets": [[reps, weight], ...]}]
-            "ex": [{"name": ex.name,
-                    "sets": [[s.reps, s.weight] for s in ex.sets] or [[None, None]]}
-                   for ex in (draft.exercises if draft else [])],
+            "rest_preset": 60,
+            "boss_idx": 0,
+            # editable copy: [{"name": str, "sets": [[reps, weight, done], ...]}]
+            "ex": [
+                {
+                    "name": ex.name,
+                    "sets": [[s.reps or 10, s.weight or 20.0, False] for s in ex.sets]
+                    or [[10, 20.0, False]],
+                }
+                for ex in (draft.exercises if draft else [])
+            ],
         }
         if not st["ex"]:
-            st["ex"] = [{"name": "", "sets": [[None, None]]}]
+            st["ex"] = [{"name": "Bench Press (Barbell)", "sets": [[10, 40.0, False], [10, 40.0, False], [10, 40.0, False]]}]
         ex_col = ft.Column(spacing=Space.SM, tight=True)
         notes = common.text_field("Notes (optional)")
         notes.value = draft.notes if draft else ""
         routine_name = common.text_field("Routine name (to save as a routine)")
+
+        # --- Interactive Labyrinth Combat Arena ---
+        target_vol = sum((s[0] or 10) * (s[1] or 20) for ex in st["ex"] for s in ex["sets"])
+        guardian = spawn_guardian_for_target_volume(max(1500, target_vol), index=st["boss_idx"])
+
+        player_avatar = avatars.bubble(
+            g.profile.avatar_id,
+            56,
+            custom=g.profile.avatar_customization,
+            frame_id=g.profile.frame_id,
+            pet_id=g.profile.pet_id,
+        )
+        player_box = ft.Container(
+            player_avatar,
+            offset=ft.Offset(0, 0),
+            scale=1.0,
+            animate_offset=Motion.anim(180, Motion.BACK),
+            animate_scale=Motion.anim(180, Motion.BACK),
+        )
+        boss_img = ft.Image(
+            src=guardian.sprite,
+            width=68,
+            height=68,
+            fit=ft.BoxFit.CONTAIN,
+            filter_quality=ft.FilterQuality.NONE,
+        )
+        boss_sprite_box = ft.Container(
+            boss_img,
+            width=72,
+            height=72,
+            alignment=ft.Alignment.CENTER,
+            scale=1.0,
+            offset=ft.Offset(0, 0),
+            animate_scale=Motion.anim(180, Motion.BACK),
+            animate_offset=Motion.anim(140, Motion.EASE_CUBIC),
+        )
+        dmg_popup_text = ft.Text(
+            "",
+            size=16,
+            weight=ft.FontWeight.W_900,
+            color="#FFD36E",
+        )
+        dmg_popup = ft.Container(
+            dmg_popup_text,
+            bgcolor=C.a("#000000", 0.78),
+            border=ft.Border.all(1.5, "#FFD36E"),
+            border_radius=Radius.PILL,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=3),
+            opacity=0,
+            offset=ft.Offset(0, 0),
+            animate_opacity=Motion.anim(220),
+            animate_offset=Motion.anim(320, Motion.EASE_CUBIC),
+        )
+        boss_name_text = ft.Text(
+            f"⚔️ {guardian.name}",
+            size=Type.BODY + 1,
+            weight=ft.FontWeight.W_900,
+            color="#FFFFFF",
+        )
+        boss_aff_text = ft.Text(
+            f"{guardian.affinity} · {guardian.title}",
+            size=10,
+            weight=ft.FontWeight.BOLD,
+            color="#4FE3F0",
+        )
+        boss_hp_bar = ft.ProgressBar(
+            value=1.0,
+            color="#FF4D6D",
+            bgcolor=C.a("#FFFFFF", 0.14),
+            height=10,
+            border_radius=5,
+        )
+        boss_hp_text = ft.Text(
+            f"{guardian.current_hp:,} / {guardian.max_hp:,} HP",
+            size=11,
+            weight=ft.FontWeight.W_800,
+            color="#FFD36E",
+        )
+        combat_log_text = ft.Text(
+            "Tap ⚡ STRIKE on each set as you finish lifting to unleash Slime attacks!",
+            size=11,
+            color="#94A3B8",
+            max_lines=2,
+        )
+        ore_counter_text = ft.Text(
+            "⛏️ +0 Star-Iron",
+            size=11,
+            weight=ft.FontWeight.W_800,
+            color="#4FE3F0",
+        )
+
+        # In-sheet Magicule Rest Recovery Overlay Banner
+        rest_banner_timer = ft.Text("1:00", size=Type.TITLE, weight=ft.FontWeight.W_900, color="#4FE3F0")
+        rest_banner_bar = ft.ProgressBar(value=0.0, color="#4FE3F0", bgcolor=C.a("#FFFFFF", 0.12), height=6, border_radius=3)
+        rest_sage_msg = ft.Text(REST_SAGE_LINES[0], size=11, color="#E2E8F0")
+        rest_sheet_gen = [0]
+
+        def stop_sheet_rest(_: Any = None) -> None:
+            sfx.play("tap")
+            rest_sheet_gen[0] += 1
+            rest_banner.visible = False
+            self._rest_stop()
+            ui.refresh(rest_banner)
+
+        rest_banner = ft.Container(
+            ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.AUTO_AWESOME, color="#4FE3F0", size=18),
+                            ft.Text(
+                                "MAGICULE RECOVERY (REST)",
+                                size=11,
+                                weight=ft.FontWeight.W_900,
+                                color="#4FE3F0",
+                                expand=True,
+                            ),
+                            rest_banner_timer,
+                            ft.TextButton(
+                                "Skip Rest",
+                                on_click=stop_sheet_rest,
+                                style=ft.ButtonStyle(color="#94A3B8", padding=4),
+                            ),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    rest_banner_bar,
+                    rest_sage_msg,
+                ],
+                spacing=4,
+                tight=True,
+            ),
+            bgcolor="#0F1E36",
+            border=ft.Border.all(1.5, C.a("#4FE3F0", 0.65)),
+            border_radius=Radius.MD,
+            padding=Space.SM,
+            visible=False,
+        )
+
+        async def run_sheet_rest(seconds: int, dmg: int, is_pr: bool) -> None:
+            rest_sheet_gen[0] += 1
+            my_gen = rest_sheet_gen[0]
+            self._rest_start(seconds)
+            line_idx = (dmg + seconds) % len(REST_SAGE_LINES)
+            prefix = f"💥 Dealt {dmg:,} DMG! " + ("🏆 NEW PR [Limit Breaker]! " if is_pr else "")
+            rest_sage_msg.value = prefix + REST_SAGE_LINES[line_idx]
+            rest_banner.visible = True
+            ui.refresh(rest_banner)
+            end_t = time.time() + seconds
+            while my_gen == rest_sheet_gen[0]:
+                left = end_t - time.time()
+                if left <= 0:
+                    rest_banner_timer.value = "READY!"
+                    rest_banner_bar.value = 1.0
+                    rest_sage_msg.value = "⚡ [GREAT SAGE] Magicules at 100%! Begin your next set!"
+                    ui.refresh(rest_banner)
+                    await asyncio.sleep(2.5)
+                    if my_gen == rest_sheet_gen[0]:
+                        rest_banner.visible = False
+                        ui.refresh(rest_banner)
+                    return
+                s = int(left + 0.99)
+                rest_banner_timer.value = f"{s // 60}:{s % 60:02d}"
+                rest_banner_bar.value = max(0.0, min(1.0, 1.0 - left / max(1, seconds)))
+                ui.refresh(rest_banner_timer, rest_banner_bar)
+                await asyncio.sleep(0.4)
+
+        def cycle_boss(_: Any = None) -> None:
+            sfx.play("tap")
+            st["boss_idx"] = (st["boss_idx"] + 1) % len(GUARDIAN_TEMPLATES)
+            t = GUARDIAN_TEMPLATES[st["boss_idx"]]
+            guardian.id, guardian.name, guardian.title, guardian.affinity, guardian.sprite = (
+                t[0], t[1], t[2], t[3], t[4]
+            )
+            boss_img.src = guardian.sprite
+            boss_name_text.value = f"⚔️ {guardian.name}"
+            boss_aff_text.value = f"{guardian.affinity} · {guardian.title}"
+            update_boss_damage()
+            ui.refresh(boss_img, boss_name_text, boss_aff_text)
+
+        boss_card = ft.Container(
+            ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Column([boss_name_text, boss_aff_text], spacing=1, expand=True, tight=True),
+                            ore_counter_text,
+                            ft.IconButton(
+                                ft.Icons.SWAP_HORIZ,
+                                icon_color="#4FE3F0",
+                                icon_size=18,
+                                tooltip="Switch Labyrinth Guardian",
+                                on_click=cycle_boss,
+                            ),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Container(
+                        ft.Stack(
+                            [
+                                ft.Row(
+                                    [
+                                        ft.Column(
+                                            [
+                                                player_box,
+                                                ft.Text(g.profile.name, size=10, weight=ft.FontWeight.BOLD, color="#E2E8F0"),
+                                            ],
+                                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                            spacing=2,
+                                            tight=True,
+                                        ),
+                                        ft.Column(
+                                            [
+                                                ft.Icon(ft.Icons.BOLT, color="#FFD36E", size=24),
+                                                ft.Text("VS", size=11, weight=ft.FontWeight.W_900, color="#FFD36E"),
+                                            ],
+                                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                            spacing=0,
+                                            tight=True,
+                                        ),
+                                        ft.Column(
+                                            [
+                                                boss_sprite_box,
+                                                ft.Text("Guardian", size=10, weight=ft.FontWeight.BOLD, color="#FF6F91"),
+                                            ],
+                                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                            spacing=2,
+                                            tight=True,
+                                        ),
+                                    ],
+                                    alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                ),
+                                ft.Container(dmg_popup, alignment=ft.Alignment.TOP_CENTER, top=2),
+                            ],
+                        ),
+                        bgcolor="#09111E",
+                        border_radius=Radius.MD,
+                        padding=ft.Padding.symmetric(horizontal=Space.MD, vertical=Space.SM),
+                        border=ft.Border.all(1, "#1E293B"),
+                    ),
+                    boss_hp_bar,
+                    ft.Row(
+                        [
+                            combat_log_text,
+                            boss_hp_text,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                spacing=6,
+                tight=True,
+            ),
+            bgcolor="#0D1729",
+            border=ft.Border.all(1.5, C.a("#4FE3F0", 0.45)),
+            border_radius=Radius.LG,
+            padding=Space.MD,
+        )
+
+        def update_boss_damage() -> tuple[int, int]:
+            """Recalculate total struck damage (from completed sets) and update boss HP bar."""
+            total_target = max(
+                1200,
+                int(sum((s[0] or 10) * (s[1] or 20) for ex in st["ex"] for s in ex["sets"])),
+            )
+            guardian.max_hp = total_target
+            struck_dmg = int(
+                sum((s[0] or 0) * (s[1] or 0) for ex in st["ex"] for s in ex["sets"] if len(s) > 2 and s[2])
+            )
+            rem_hp = max(0, guardian.max_hp - struck_dmg)
+            guardian.current_hp = rem_hp
+            boss_hp_bar.value = max(0.0, rem_hp / max(1, guardian.max_hp))
+            ore_counter_text.value = f"⛏️ +{struck_dmg:,} Star-Iron"
+            if rem_hp == 0 and struck_dmg > 0:
+                boss_hp_text.value = "🏆 BOSS SLAIN! (+60 Bonus XP)"
+                boss_hp_text.color = "#5EEAB0"
+                boss_hp_bar.color = "#5EEAB0"
+            else:
+                boss_hp_text.value = f"{rem_hp:,} / {guardian.max_hp:,} HP"
+                boss_hp_text.color = "#FFD36E"
+                boss_hp_bar.color = "#FF4D6D"
+            ui.refresh(boss_hp_bar, boss_hp_text, ore_counter_text)
+            return struck_dmg, rem_hp
+
+        async def play_strike_anim(ex_idx: int, set_idx: int) -> None:
+            s = st["ex"][ex_idx]["sets"][set_idx]
+            reps = int(s[0] or 0)
+            weight = float(s[1] or 0.0)
+            if reps <= 0 and weight <= 0:
+                reps, weight = 10, 20.0
+                s[0], s[1] = reps, weight
+            dmg = max(10, round(reps * (weight if weight > 0 else 10.0)))
+            ex_name = (st["ex"][ex_idx]["name"] or "Exercise").strip()
+
+            # Check PR against saved exercise_prs
+            prev_pr = g.data.exercise_prs.get(ex_name, 0.0)
+            is_pr = weight > prev_pr and weight > 0
+            if is_pr:
+                g.data.exercise_prs[ex_name] = weight
+                if "Unique Trait: [Limit Breaker]" not in g.data.unlocked_workout_traits:
+                    g.data.unlocked_workout_traits.append("Unique Trait: [Limit Breaker]")
+
+            # 1. Player lunges right, SFX + Haptic
+            sfx.play("milestone" if is_pr else "quest_clear", 0.85)
+            await ui.buzz("heavy" if is_pr else "medium")
+            player_box.offset = ft.Offset(0.35, 0)
+            player_box.scale = 1.18
+            dmg_popup_text.value = f"💥 -{dmg:,} HP!" + (" 🏆 PR!" if is_pr else "")
+            dmg_popup_text.color = "#5EEAB0" if is_pr else "#FFD36E"
+            dmg_popup.opacity = 1
+            dmg_popup.offset = ft.Offset(0, -0.15)
+            ui.refresh(player_box, dmg_popup)
+
+            await asyncio.sleep(0.16)
+            # 2. Boss recoils & flashes
+            boss_sprite_box.offset = ft.Offset(0.22, -0.08)
+            boss_sprite_box.scale = 0.84
+            player_box.offset = ft.Offset(0, 0)
+            player_box.scale = 1.0
+            combat_log_text.value = (
+                f"⚡ {ex_name} Set {set_idx + 1}: Dealt {dmg:,} DMG!"
+                + (" 🏆 NEW PR [Limit Breaker]!" if is_pr else "")
+            )
+            combat_log_text.color = "#5EEAB0" if is_pr else "#FFD36E"
+            _, rem_hp = update_boss_damage()
+            ui.refresh(boss_sprite_box, player_box, combat_log_text)
+
+            await asyncio.sleep(0.22)
+            boss_sprite_box.offset = ft.Offset(0, 0)
+            boss_sprite_box.scale = 0.65 if rem_hp == 0 else 1.0
+            ui.refresh(boss_sprite_box)
+
+            # Start automatic Magicule Rest Timer
+            if st["rest_preset"] > 0:
+                app.page.run_task(run_sheet_rest, st["rest_preset"], dmg, is_pr)
+
+            await asyncio.sleep(0.9)
+            dmg_popup.opacity = 0
+            dmg_popup.offset = ft.Offset(0, 0)
+            ui.refresh(dmg_popup)
 
         def num_field(value: Any, hint_text: str, on_change: Any) -> ft.TextField:
             f = ft.TextField(value="" if value is None else f"{value:g}", hint_text=hint_text,
@@ -392,21 +963,66 @@ class WorkoutScreen:
                                   on_click=lambda e, k=i: remove_ex(k)),
                 ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER)
                 rows: list[ft.Control] = []
-                for j, (reps, weight) in enumerate(ex["sets"]):
+                for j, s_item in enumerate(ex["sets"]):
+                    while len(s_item) < 3:
+                        s_item.append(False)
+                    reps, weight, done = s_item[0], s_item[1], bool(s_item[2])
+
                     def set_val(e: Any, k: int = i, m: int = j, col: int = 0) -> None:
                         st["ex"][k]["sets"][m][col] = _num(e.control.value,
                                                            int if col == 0 else float)
+                        update_boss_damage()
+
+                    def toggle_strike(_: Any, k: int = i, m: int = j) -> None:
+                        cur = bool(st["ex"][k]["sets"][m][2])
+                        st["ex"][k]["sets"][m][2] = not cur
+                        repaint()
+                        if not cur:
+                            app.page.run_task(play_strike_anim, k, m)
+                        else:
+                            sfx.play("tap")
+                            update_boss_damage()
+
+                    set_dmg = int((reps or 0) * (weight or 0))
+                    strike_btn = ft.Container(
+                        ft.Row(
+                            [
+                                ft.Icon(
+                                    ft.Icons.CHECK_CIRCLE if done else ft.Icons.BOLT,
+                                    size=15,
+                                    color="#09111E" if done else "#FFD36E",
+                                ),
+                                ft.Text(
+                                    f"{set_dmg} DMG" if done else "STRIKE",
+                                    size=10,
+                                    weight=ft.FontWeight.W_900,
+                                    color="#09111E" if done else "#FFD36E",
+                                ),
+                            ],
+                            spacing=3,
+                            tight=True,
+                        ),
+                        bgcolor="#5EEAB0" if done else C.a("#FFD36E", 0.16),
+                        border=ft.Border.all(1.2, "#5EEAB0" if done else "#FFD36E"),
+                        border_radius=Radius.PILL,
+                        padding=ft.Padding.symmetric(horizontal=10, vertical=7),
+                        on_click=toggle_strike,
+                        ink=True,
+                        tooltip="Complete Set & Strike Guardian!",
+                    )
                     rows.append(ft.Row([
-                        ft.Text(f"Set {j + 1}", size=Type.CAPTION, color=C.TEXT_DIM, width=40),
+                        ft.Text(f"S{j + 1}", size=Type.CAPTION, weight=ft.FontWeight.BOLD,
+                                color="#5EEAB0" if done else C.TEXT_DIM, width=26),
                         num_field(reps, "reps", lambda e, k=i, m=j: set_val(e, k, m, 0)),
                         ft.Text("×", color=C.TEXT_DIM),
                         num_field(weight, st["unit"], lambda e, k=i, m=j: set_val(e, k, m, 1)),
-                        ft.IconButton(ft.Icons.REMOVE_CIRCLE_OUTLINE, icon_size=18, width=36,
-                                      height=40, icon_color=C.TEXT_DIM, tooltip="Remove set",
+                        strike_btn,
+                        ft.IconButton(ft.Icons.REMOVE_CIRCLE_OUTLINE, icon_size=16, width=30,
+                                      height=36, icon_color=C.TEXT_DIM, tooltip="Remove set",
                                       disabled=len(ex["sets"]) == 1,
                                       on_click=lambda e, k=i, m=j: remove_set(k, m)),
-                    ], spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER))
-                rows.append(ft.TextButton("Add set", icon=ft.Icons.ADD, height=40,
+                    ], spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER))
+                rows.append(ft.TextButton("Add set", icon=ft.Icons.ADD, height=36,
                                           on_click=lambda e, k=i: add_set(k)))
                 blocks.append(ft.Container(ft.Column([head, *rows], spacing=Space.XS,
                                                      tight=True),
@@ -416,6 +1032,7 @@ class WorkoutScreen:
 
         def repaint() -> None:
             paint()
+            update_boss_damage()
             ui.refresh(ex_col)
 
         def move(i: int, d: int) -> None:
@@ -431,13 +1048,14 @@ class WorkoutScreen:
 
         def add_ex(name: str = "") -> None:
             sfx.play("tap")
-            st["ex"].append({"name": name, "sets": [[None, None]]})
+            st["ex"].append({"name": name, "sets": [[10, 20.0, False], [10, 20.0, False], [10, 20.0, False]]})
             repaint()
 
         def add_set(i: int) -> None:
             sfx.play("tap")
             sets = st["ex"][i]["sets"]
-            sets.append(list(sets[-1]) if sets else [None, None])  # repeat the last set
+            last = sets[-1] if sets else [10, 20.0, False]
+            sets.append([last[0], last[1], False])
             repaint()
 
         def remove_set(i: int, j: int) -> None:
@@ -450,12 +1068,16 @@ class WorkoutScreen:
             st["unit"] = v
             repaint()
 
+        def set_rest_preset(v: str) -> None:
+            sfx.play("toggle")
+            st["rest_preset"] = int(v)
+
         def exercises() -> list[ExerciseEntry]:
             out = []
             for ex in st["ex"]:
                 name = (ex["name"] or "").strip()
-                sets = [SetEntry(reps=r, weight=w, unit=st["unit"]) for r, w in ex["sets"]
-                        if r is not None or w is not None]
+                sets = [SetEntry(reps=s[0], weight=s[1], unit=st["unit"]) for s in ex["sets"]
+                        if s[0] is not None or s[1] is not None]
                 if name:
                     out.append(ExerciseEntry(name, sets))
             return out
@@ -465,9 +1087,16 @@ class WorkoutScreen:
             if not exs and not st["minutes"]:
                 app.error("Add an exercise or some minutes first")
                 return
+            # Calculate total Star-Iron Ore earned from all sets with reps & weight
+            total_ore = int(
+                sum((s[0] or 0) * (s[1] or 0) for ex in st["ex"] for s in ex["sets"] if (s[0] or 0) > 0 and (s[1] or 0) > 0)
+            )
+            g.data.star_iron += total_ore
             qid, pid = self._link_args(st)
             common.close(sheet)
             label = f"{len(exs)} exercise{'s' if len(exs) != 1 else ''}"
+            if total_ore > 0:
+                label += f" (+{total_ore:,} Star-Iron Ore)"
             app.page.run_task(self._log, lambda: g.log_workout(
                 st["minutes"], app.today(), st["type"], st["effort"],
                 (notes.value or "").strip(), qid, pid, exs), label)
@@ -494,17 +1123,34 @@ class WorkoutScreen:
             self._refresh()
 
         paint()
+        update_boss_damage()
         known = g.exercise_names()[:8]
         minutes = common.stepper(st["minutes"], lambda v: st.update(minutes=v), lo=0, hi=300,
                                  step=5, suffix=" min", width=72)
+
         body: list[ft.Control] = [
+            boss_card,
+            rest_banner,
+            ft.Row([
+                common.hint("Auto-Rest after Strike"),
+                ft.Container(expand=True),
+                common.segmented(
+                    [("0", "Off"), ("60", "60s"), ("90", "90s"), ("120", "2m")],
+                    str(st["rest_preset"]),
+                    on_change=set_rest_preset,
+                ),
+            ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Row([common.hint("Weights in"), ft.Container(expand=True),
                     common.segmented([("kg", "kg"), ("lb", "lb")], st["unit"],
                                      on_change=set_unit)],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ex_col,
-            ft.Row([common.secondary_button("Add exercise", lambda e: add_ex(),
-                                            icon=ft.Icons.ADD)]),
+            ft.Row([
+                common.primary_button("Browse Exercises", lambda e: self._open_exercise_picker(add_ex),
+                                      icon=ft.Icons.SEARCH),
+                common.secondary_button("Custom Exercise", lambda e: add_ex(),
+                                        icon=ft.Icons.ADD),
+            ], spacing=Space.SM),
         ]
         if known:
             body.append(ft.Row([ft.TextButton(n, height=36, on_click=lambda e, n=n: add_ex(n))

@@ -112,6 +112,7 @@ class C:
     TEXT_DIM = ft.Colors.ON_SURFACE_VARIANT
     OUTLINE = ft.Colors.OUTLINE_VARIANT
     SCRIM = ft.Colors.SCRIM
+    GOLD = "#F5C66B"  # Celestial gold for milestones, coin streaks & prestige rewards
 
     @staticmethod
     def a(color: str, opacity: float) -> str:
@@ -166,7 +167,7 @@ class Palette:
 
 THEMES: dict[str, Palette] = {
     "arcane": Palette(
-        id="arcane", name="Arcane",
+        id="arcane", name="Default Theme",
         # panels read as translucent navy over the near-black bg (solid hex: dialogs, sheets
         # and the nav bar use these slots too and must stay opaque)
         bg="#070B14", surface="#0D1524", surface_hi="#131F35",
@@ -183,7 +184,7 @@ THEMES: dict[str, Palette] = {
     # as "done" against all the pink). Contrast (WCAG): text 16.1:1 on panels, dim text 7.8:1
     # on the brightest panel, dark-on-rose buttons 7.2:1.
     "rose": Palette(
-        id="rose", name="Rose Arcana",
+        id="rose", name="Rose Theme",
         bg="#120814", surface="#1C0D21", surface_hi="#27142E",
         primary="#FF6FB1", on_primary="#2B0418",
         accent="#FFC08A", success="#6EE7BF", danger="#FF8063",
@@ -195,7 +196,7 @@ THEMES: dict[str, Palette] = {
         glow=True,
     ),
     "ember": Palette(
-        id="ember", name="Ember",
+        id="ember", name="Ember Theme",
         bg="#14110F", surface="#1F1A16", surface_hi="#2B241F",
         primary="#FFA53A", on_primary="#2B1500",
         accent="#FFD54A", success="#5BD68A", danger="#FF6B5B",
@@ -205,34 +206,123 @@ THEMES: dict[str, Palette] = {
                "monk": "#A8C69F"},
     ),
     "ocean": Palette(
-        id="ocean", name="Ocean",
-        bg="#0B141A", surface="#122029", surface_hi="#1B2D3A",
-        primary="#3EC6E0", on_primary="#00262E",
-        accent="#FFD54A", success="#5BD6A0", danger="#FF6B6B",
-        text="#EAF4F8", text_dim="#9AB2BF",
+        id="ocean", name="Ocean Theme",
+        bg="#040D17", surface="#091829", surface_hi="#112740",
+        primary="#00E5FF", on_primary="#00212E",
+        accent="#64FFDA", success="#00F5D4", danger="#FF5252",
+        text="#E0F7FA", text_dim="#80DEEA",
         paths={"chef": "#FF9966", "warrior": "#FF6B81", "scholar": "#7FB8FF",
                "artisan": "#B794FF", "ranger": "#4FD8A8", "steward": "#FFD166",
                "monk": "#84C9B4"},
+        glow=True,
     ),
     "forest": Palette(
-        id="forest", name="Forest",
-        bg="#0E140F", surface="#162019", surface_hi="#203024",
-        primary="#9BD46A", on_primary="#132600",
-        accent="#FFD54A", success="#3FD8B0", danger="#FF6F5E",
-        text="#EDF5EA", text_dim="#A3B5A0",
+        id="forest", name="Forest Theme",
+        bg="#051208", surface="#0B1E10", surface_hi="#132F1A",
+        primary="#69F0AE", on_primary="#00260E",
+        accent="#EEFF41", success="#00E676", danger="#FF5252",
+        text="#E8F5E9", text_dim="#A5D6A7",
         paths={"chef": "#FF9A5A", "warrior": "#F2665A", "scholar": "#6FB3E8",
                "artisan": "#D08CF0", "ranger": "#7FD65A", "steward": "#E8C547",
                "monk": "#84A98C"},
+        glow=True,
     ),
     "royal": Palette(
-        id="royal", name="Royal",
-        bg="#110E19", surface="#1A1626", surface_hi="#252036",
-        primary="#A98BFF", on_primary="#1C0E45",
-        accent="#FFD54A", success="#5BD68A", danger="#FF6B8A",
-        text="#F2EEFB", text_dim="#ABA3C4",
+        id="royal", name="Royal Theme",
+        bg="#0D071C", surface="#160C2E", surface_hi="#24144A",
+        primary="#D500F9", on_primary="#20002E",
+        accent="#FFD700", success="#76FF03", danger="#FF1744",
+        text="#F3E5F5", text_dim="#CE93D8",
         paths={"chef": "#FF9466", "warrior": "#FF6B8A", "scholar": "#6FA8FF",
                "artisan": "#E08CFF", "ranger": "#5BD6A0", "steward": "#FFCC55",
                "monk": "#9CC5A8"},
+        glow=True,
+    ),
+    "matcha": Palette(
+        id="matcha", name="Matcha Theme",
+        bg="#0A120D", surface="#111C15", surface_hi="#19291F",
+        primary="#7CE395", on_primary="#06210E",
+        accent="#F6C85F", success="#4FD8B0", danger="#FF7A70",
+        text="#F2F7EE", text_dim="#A3BCA8",
+        paths={"chef": "#FFA071", "warrior": "#FF6F91", "scholar": "#6BB8FF",
+               "artisan": "#C99BFF", "ranger": "#5EEAB0", "steward": "#FFD36E",
+               "monk": "#9FD8B8"},
+    ),
+    "lavender": Palette(
+        id="lavender", name="Lavender Theme",
+        bg="#0C0B16", surface="#151324", surface_hi="#1F1C33",
+        primary="#B8A9FF", on_primary="#160F38",
+        accent="#F4BCFF", success="#5EEAB0", danger="#FF7E95",
+        text="#F3F0FF", text_dim="#ABA5CC",
+        paths={"chef": "#FFA071", "warrior": "#FF6F91", "scholar": "#6BB8FF",
+               "artisan": "#C99BFF", "ranger": "#5EEAB0", "steward": "#FFD36E",
+               "monk": "#9FD8B8"},
+    ),
+    "sakura": Palette(
+        id="sakura", name="Sakura Theme",
+        bg="#110A14", surface="#1A1120", surface_hi="#25182E",
+        primary="#FFB7C5", on_primary="#2E0B14",
+        accent="#FFD166", success="#6EE7BF", danger="#FF758F",
+        text="#FFF0F5", text_dim="#C9AFC0",
+        paths={"chef": "#FFA066", "warrior": "#FF5E68", "scholar": "#7DB6FF",
+               "artisan": "#C29BFF", "ranger": "#5FE0B0", "steward": "#FFD66E",
+               "monk": "#B3D99A"},
+        glow=True,
+    ),
+    "cyber": Palette(
+        id="cyber", name="Cyber Theme",
+        bg="#080614", surface="#110C24", surface_hi="#1A1334",
+        primary="#00F5D4", on_primary="#00221D",
+        accent="#FF70A6", success="#5EEAB0", danger="#FF6B8B",
+        text="#F0EDFF", text_dim="#A59DC9",
+        paths={"chef": "#FFA071", "warrior": "#FF6F91", "scholar": "#6BB8FF",
+               "artisan": "#C99BFF", "ranger": "#5EEAB0", "steward": "#FFD36E",
+               "monk": "#9FD8B8"},
+        glow=True,
+    ),
+    "solar": Palette(
+        id="solar", name="Solar Theme",
+        bg="#110E08", surface="#1A160D", surface_hi="#262013",
+        primary="#FFD166", on_primary="#291E00",
+        accent="#FFA94D", success="#5EEAB0", danger="#FF758F",
+        text="#FFF9EB", text_dim="#C4B699",
+        paths={"chef": "#FFA071", "warrior": "#FF6F91", "scholar": "#6BB8FF",
+               "artisan": "#C99BFF", "ranger": "#5EEAB0", "steward": "#FFD36E",
+               "monk": "#9FD8B8"},
+        glow=True,
+    ),
+    "crimson": Palette(
+        id="crimson", name="Bloodmoon Theme",
+        bg="#120609", surface="#1C0A0F", surface_hi="#281017",
+        primary="#FF758F", on_primary="#2B0008",
+        accent="#FFD166", success="#5EEAB0", danger="#FF8FA3",
+        text="#FFE8EC", text_dim="#CCA3AC",
+        paths={"chef": "#FFA071", "warrior": "#FF6F91", "scholar": "#6BB8FF",
+               "artisan": "#C99BFF", "ranger": "#5EEAB0", "steward": "#FFD36E",
+               "monk": "#9FD8B8"},
+        glow=True,
+    ),
+    "aurora": Palette(
+        id="aurora", name="Aurora Theme",
+        bg="#061014", surface="#0C1B22", surface_hi="#132832",
+        primary="#64DFDF", on_primary="#002424",
+        accent="#C9A7FF", success="#80FFDB", danger="#FF758F",
+        text="#E8FBF8", text_dim="#9AC0C9",
+        paths={"chef": "#FFA071", "warrior": "#FF6F91", "scholar": "#6BB8FF",
+               "artisan": "#C99BFF", "ranger": "#5EEAB0", "steward": "#FFD36E",
+               "monk": "#9FD8B8"},
+        glow=True,
+    ),
+    "abyss": Palette(
+        id="abyss", name="Abyssal Theme",
+        bg="#05030A", surface="#0D0818", surface_hi="#160F29",
+        primary="#C79BFF", on_primary="#1E0038",
+        accent="#72EFDD", success="#5EEAB0", danger="#FF758F",
+        text="#F5EBFF", text_dim="#AA99C4",
+        paths={"chef": "#FFA071", "warrior": "#FF6F91", "scholar": "#6BB8FF",
+               "artisan": "#C99BFF", "ranger": "#5EEAB0", "steward": "#FFD36E",
+               "monk": "#9FD8B8"},
+        glow=True,
     ),
 }
 

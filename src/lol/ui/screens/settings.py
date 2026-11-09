@@ -15,10 +15,10 @@ from lol.core import i18n
 from lol.core.cloud_save import SyncState
 from lol.core.models import NOTIFY_SOUNDS
 from lol.ui import components as ui
-from lol.ui import notify, sfx
+from lol.ui import notify, permissions, sfx
 from lol.ui.screens import common
 from lol.ui.screens.premium import settings_blocks as premium_settings
-from lol.ui.screens.profile import theme_picker, voice_controls
+from lol.ui.screens.profile import voice_controls
 from lol.ui.theme import C, Motion, Radius, Space, Type
 
 if TYPE_CHECKING:
@@ -45,8 +45,6 @@ class SettingsScreen:
                 "Reduce effects", "Simple fades instead of bursts and spinning rings. "
                 "Sounds play a little quieter.", self.app.game.profile.reduce_effects,
                 self._set_reduce, icon=ft.Icons.MOTION_PHOTOS_OFF)),
-            ui.SectionHeader("Theme"),
-            theme_picker(self.app),
             ui.SectionHeader("Middle button"),
             self._middle_button(),
             ui.SectionHeader("Cloud Save"),
@@ -55,6 +53,8 @@ class SettingsScreen:
             self._modules(),
             ui.SectionHeader("Notifications"),
             self._notifications(),
+            ui.SectionHeader("Permissions & Local Storage"),
+            permissions.permissions_card(self.app),
             ui.SectionHeader("Personalize"),
             common.card(ft.Column([
                 common.hint("Retake Luma's short quiz to retune your Paths, starter quests "
@@ -64,6 +64,8 @@ class SettingsScreen:
             ], spacing=Space.SM, tight=True), padding=Space.MD),
             ui.SectionHeader("Language"),
             self._language_picker(),
+            ui.SectionHeader("App Updates"),
+            self._update_checker_section(),
             ui.SectionHeader("Credits"),
             self._credits_section(),
             *premium_settings(self.app, self.restyle),  # usage left, version, Developer
@@ -493,6 +495,67 @@ class SettingsScreen:
             ft.Row([common.secondary_button(i18n.tr("View Credits"), open_credits,
                                             icon=ft.Icons. VERIFIED_OUTLINED)]),
         ], spacing=Space.SM, tight=True), padding=Space.MD)
+
+    def _update_checker_section(self) -> ft.Control:
+        """Card that lets users manually check for app updates and view their installed version."""
+        from lol.core import cloud_config, update_checker
+        from lol.ui import cloud_sync
+
+        status_text = ft.Text(
+            f"Installed version: v{cloud_config.APP_VERSION}",
+            size=Type.CAPTION,
+            color=C.TEXT_DIM,
+        )
+        check_btn = common.secondary_button("Check for Updates", None, icon=ft.Icons.SYSTEM_UPDATE_ROUNDED)
+
+        async def run_check(_: Any = None) -> None:
+            check_btn.disabled = True
+            status_text.value = "Checking Google Play Store..."
+            ui.refresh(check_btn, status_text)
+            await ui.buzz("light")
+
+            info = await update_checker.check_for_store_update_async()
+            check_btn.disabled = False
+            if info.available:
+                status_text.value = f"New update available: v{info.latest_version}!"
+                status_text.color = C.PRIMARY
+                ui.refresh(check_btn, status_text)
+                cloud_sync.prompt_store_update(self.app, info)
+            else:
+                status_text.value = f"You are on the latest version (v{cloud_config.APP_VERSION})."
+                status_text.color = C.SUCCESS
+                ui.refresh(check_btn, status_text)
+                self.app.toast("LUMA is up to date!", ft.Icons.CHECK_CIRCLE)
+
+        check_btn.on_click = run_check
+
+        return common.card(
+            ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.NEW_RELEASES, color=C.PRIMARY, size=20),
+                            ft.Text(
+                                "Check for Updates",
+                                size=Type.BODY,
+                                weight=ft.FontWeight.W_600,
+                                color=C.TEXT,
+                                expand=True,
+                            ),
+                        ],
+                        spacing=Space.SM,
+                    ),
+                    common.hint(
+                        "LUMA automatically checks for updates when launched. You can also manually check anytime."
+                    ),
+                    status_text,
+                    ft.Row([check_btn]),
+                ],
+                spacing=Space.SM,
+                tight=True,
+            ),
+            padding=Space.MD,
+        )
 
     def _set_reduce(self, on: bool) -> None:
         self.app.game.set_profile(reduce_effects=on)

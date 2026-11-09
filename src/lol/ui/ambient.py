@@ -40,6 +40,7 @@ from typing import Any
 import flet as ft
 import flet.canvas as cv
 
+from lol.core import cosmetics as cos
 from lol.ui import effects as fx
 from lol.ui import theme as th
 from lol.ui.theme import Radius, Space
@@ -103,7 +104,7 @@ class Tones:
 
 def tones(pal: th.Palette | None = None) -> Tones:
     pal = pal or th.current()
-    if pal.id == "rose":  # Rose Arcana: the full mind-space in plum / rose / lilac / peach
+    if pal.id == "rose":  # Rose Theme
         return Tones(
             base=("#1F0A26", pal.bg, "#070209"),
             nebula=(("#A8327E", 0.50), ("#B79BFF", 0.34), (pal.primary, 0.26),
@@ -112,7 +113,34 @@ def tones(pal: th.Palette | None = None) -> Tones:
             motes=(pal.primary, "#FFD3E8", WHITE, "#FFC4A8", "#D8C2FF"),
             stars=(WHITE, "#FFE3F1", "#E4D3FF"),
             lines=pal.primary, vignette="#050106", strength=1.0)
-    if pal.glow:  # Arcane: the full cyan / teal / violet / mint mind-space
+    if pal.id == "ocean":  # Premium Ocean: bioluminescent depths with vibrant cyan/aquamarine auroral swells
+        return Tones(
+            base=("#02101F", pal.bg, "#00060D"),
+            nebula=(("#00B4D8", 0.65), ("#0077B6", 0.55), (pal.primary, 0.40),
+                    ("#03045E", 0.70), ("#90E0EF", 0.25)),
+            bokeh=(pal.primary, "#48CAE4", "#00F5D4"),
+            motes=(pal.primary, "#CAF0F8", WHITE, "#90E0EF", "#00F5D4"),
+            stars=(WHITE, "#ADE8F4", "#90E0EF"),
+            lines=pal.primary, vignette="#010810", strength=1.2)
+    if pal.id == "forest":  # Premium Forest: enchanted elderwood canopy with luminous emerald nebulas
+        return Tones(
+            base=("#051A0C", pal.bg, "#010803"),
+            nebula=(("#2D6A4F", 0.65), ("#40916C", 0.50), (pal.primary, 0.38),
+                    ("#1B4332", 0.75), ("#D8F3DC", 0.20)),
+            bokeh=(pal.primary, "#74C69D", "#52B788"),
+            motes=(pal.primary, "#D8F3DC", WHITE, "#B7E4C7", "#95D5B2"),
+            stars=(WHITE, "#D8F3DC", "#B7E4C7"),
+            lines=pal.primary, vignette="#010703", strength=1.2)
+    if pal.id == "royal":  # Premium Royal: cosmic monarch velvet twilight with brilliant magenta & starlight gold
+        return Tones(
+            base=("#1A072E", pal.bg, "#080210"),
+            nebula=(("#7209B7", 0.65), ("#B5179E", 0.52), (pal.primary, 0.45),
+                    ("#3A0CA3", 0.75), ("#FFD700", 0.22)),
+            bokeh=(pal.primary, "#F72585", "#FFD700"),
+            motes=(pal.primary, "#F72585", WHITE, "#FFD700", "#4CC9F0"),
+            stars=(WHITE, "#F72585", "#FFD700"),
+            lines=pal.primary, vignette="#06010D", strength=1.25)
+    if pal.glow:  # Default Theme / Arcane
         return Tones(
             base=("#0A1428", pal.bg, "#04060C"),
             nebula=(("#1FA9B8", 0.52), ("#A78BFA", 0.40), (pal.primary, 0.28),
@@ -167,37 +195,373 @@ class _Drifter:
         c.offset, c.scale, c.opacity = ft.Offset(0, 0), 1.0, self.base_op * 0.85
 
 
-class _Mote:
-    """A floating light point. Lives in ticks: spawn (hidden, snapped) -> rise (slow upward
-    drift + fade in) -> twinkle -> fade -> spawn again somewhere else."""
+_PARTICLE_PALETTES: dict[str, tuple[str, ...]] = {
+    "sakura": ("#FFB7C5", "#FF8FA3", "#FFE5EC", "#FFC2D1", "#FF6FB1"),
+    "fireflies": ("#D9ED92", "#B5E48C", "#FFD166", "#9BD46A", "#FFEE99"),
+    "hearts": ("#FF4D6D", "#FF758F", "#FF8FA3", "#FFB3C1", "#FFA8BA"),
+    "embers": ("#FFD166", "#FFA53A", "#FF6B35", "#FF4D6D", "#FFF3B0"),
+    "snow": ("#FFFFFF", "#CFF8FF", "#80FFDB", "#E0F7FA", "#BEE9E8"),
+    "cyber": ("#00FF66", "#00F5D4", "#FF007F", "#00F0FF", "#39FF14", "#FF2A85"),
+    "cosmic": ("#FFFFFF", "#C77DFF", "#72EFDD", "#FFD166", "#E0AAFF"),
+    "stardust": ("#FFFFFF", "#E0AAFF", "#FFD166", "#72EFDD", "#C77DFF"),
+}
 
-    def __init__(self, ctrl: ft.Container, d: float, peak: float, rnd: random.Random) -> None:
+
+class _Mote:
+    """A living particle in MindSpace supporting distinct sprite variants and physics:
+    sakura (falling with wind sway & rotation),
+    fireflies (hovering 2D wander with on/off pulsing blink),
+    hearts (pops up in random spots and pops back out),
+    snow (crystalline falling descent with soft ambient winter tint),
+    cyber (matrix-style falling digital glyph rain with symbol morphing & neon tint),
+    cosmic (3D starfield forward warp heading towards the viewer),
+    and classic ambient light motes."""
+
+    def __init__(self, ctrl: ft.Container, d: float, peak: float, rnd: random.Random,
+                 mode: str = "motes") -> None:
         self.ctrl, self.d, self.peak, self.rnd = ctrl, d, peak, rnd
-        ctrl.animate_position = ctrl.animate_opacity = SNAP  # animated from the start
+        self.mode = mode
+        self.color = ""
+        self.variants: list[str] = []
+        self.phase = rnd.uniform(0, math.tau)
+        self.angle = rnd.uniform(0, math.tau)
+        self.dist = rnd.uniform(10, 30)
+        self.is_lit = False
+        self.blink_ticks = rnd.randint(1, 4)
+        self.sub_state = "hidden"
+        self.phase_ticks = rnd.randint(1, 3)
+        ctrl.animate_position = ctrl.animate_opacity = ctrl.animate_scale = ctrl.animate_rotation = SNAP
         self.state = "spawn"
         self.left = 0
 
-    def spawn(self, w: float, h: float, *, y_range: tuple[float, float] = (0.3, 1.02)) -> None:
+    def configure_shape(self, color: str, mode: str) -> None:
+        self.mode = mode
+        self.color = color
+        c, d, r = self.ctrl, self.d, self.rnd
+
+        variants = cos.particle_asset_variants(mode)
+        self.variants = variants
+        if variants:
+            chosen = r.choice(variants)
+            if mode == "sakura":
+                sz = r.uniform(16.0, 24.0)
+            elif mode == "fireflies":
+                sz = r.uniform(13.0, 20.0)
+            elif mode in ("hearts", "embers"):
+                sz = r.uniform(15.0, 22.0)
+            elif mode == "snow":
+                sz = r.uniform(12.0, 18.0)
+            elif mode == "cyber":
+                sz = r.uniform(18.0, 24.0)
+            elif mode in ("cosmic", "stardust"):
+                sz = r.uniform(16.0, 24.0)
+            else:
+                sz = max(14.0, d * 1.5)
+
+            c.width = c.height = sz
+            c.shape = ft.BoxShape.RECTANGLE
+            c.border_radius = None
+            c.border = None
+            c.gradient = None
+            c.bgcolor = None
+            c.scale = 1.0
+            c.rotate = 0.0
+
+            img_color: str | None = None
+            img_blend: ft.BlendMode | None = None
+            if mode == "cyber":
+                img_color = color
+                img_blend = ft.BlendMode.SRC_IN
+            elif mode == "snow":
+                img_color = "#FFFFFF"
+                img_blend = ft.BlendMode.SRC_IN
+
+            if isinstance(c.content, ft.Image):
+                c.content.src = chosen
+                c.content.width = sz
+                c.content.height = sz
+                c.content.color = img_color
+                c.content.color_blend_mode = img_blend
+            else:
+                c.content = ft.Image(
+                    src=chosen,
+                    width=sz,
+                    height=sz,
+                    fit=ft.BoxFit.CONTAIN,
+                    color=img_color,
+                    color_blend_mode=img_blend,
+                )
+            return
+
+        c.content = None
+        fx._repaint_dot(c, color)
+        if mode == "sakura":
+            c.width, c.height = d * 1.65, d * 1.15
+            c.shape = ft.BoxShape.RECTANGLE
+            c.border_radius = ft.BorderRadius.only(
+                top_left=d * 1.3,
+                bottom_right=d * 1.3,
+                top_right=d * 0.3,
+                bottom_left=d * 0.45,
+            )
+            c.rotate = self.rnd.uniform(-0.9, 0.9)
+            c.border = ft.Border.all(0.7, a(color, 0.5))
+        elif mode == "fireflies":
+            c.width = c.height = max(5.5, d * 1.15)
+            c.shape = ft.BoxShape.CIRCLE
+            c.border_radius = None
+            c.rotate = 0
+            c.border = ft.Border.all(1.5, a("#FFFFFF", 0.75))
+        elif mode in ("hearts", "embers"):
+            c.width = c.height = max(8.0, d * 1.4)
+            c.shape = ft.BoxShape.RECTANGLE
+            c.border_radius = ft.BorderRadius.only(
+                top_left=d * 0.9,
+                top_right=d * 0.9,
+                bottom_left=d * 0.35,
+                bottom_right=d * 0.35,
+            )
+            c.rotate = self.rnd.uniform(-0.35, 0.35)
+            c.border = ft.Border.all(0.8, a("#FFFFFF", 0.6))
+        elif mode == "snow":
+            c.width = c.height = max(3.8, d * 0.95)
+            c.shape = ft.BoxShape.RECTANGLE
+            c.border_radius = ft.BorderRadius.all(max(2.0, d * 0.5))
+            c.rotate = self.rnd.uniform(-0.5, 0.5)
+            c.border = ft.Border.all(0.6, a("#FFFFFF", 0.6))
+        elif mode == "cyber":
+            c.width, c.height = max(2.2, d * 0.35), max(18.0, d * 3.2)
+            c.shape = ft.BoxShape.RECTANGLE
+            c.border_radius = 2
+            c.rotate = 0
+            c.border = None
+        elif mode in ("cosmic", "stardust"):
+            c.width = c.height = max(4.5, d * 1.0)
+            c.shape = ft.BoxShape.RECTANGLE
+            c.border_radius = 1.0
+            c.rotate = math.pi / 4
+            c.border = ft.Border.all(0.8, a("#FFFFFF", 0.7))
+        else:
+            c.width = c.height = d
+            c.shape = ft.BoxShape.CIRCLE
+            c.border_radius = None
+            c.rotate = 0
+            c.border = None
+
+    def spawn(self, w: float, h: float, *, y_range: tuple[float, float] | None = None) -> None:
         c, r = self.ctrl, self.rnd
-        c.animate_position = c.animate_opacity = SNAP
-        c.left = r.uniform(-4, w - self.d + 4)
-        c.top = r.uniform(h * y_range[0], h * y_range[1])
-        c.opacity = 0
-        self.state = "rise"
+        c.animate_position = c.animate_opacity = c.animate_scale = c.animate_rotation = SNAP
+
+        if self.mode == "sakura":
+            c.left = r.uniform(-20, w * 0.9)
+            c.top = r.uniform(h * 0.05, h * 0.95) if y_range else r.uniform(-35, -10)
+            c.scale = r.uniform(0.85, 1.15)
+            c.rotate = r.uniform(0, math.tau)
+            c.opacity = r.uniform(0.7, 0.95)
+            self.state = "active"
+
+        elif self.mode == "snow":
+            c.left = r.uniform(0, max(1.0, w - (c.width or 16)))
+            c.top = r.uniform(h * 0.05, h * 0.95) if y_range else r.uniform(-30, -10)
+            c.scale = r.uniform(0.8, 1.1)
+            c.rotate = r.uniform(-0.5, 0.5)
+            c.opacity = r.uniform(0.75, 1.0)
+            self.state = "active"
+
+        elif self.mode == "cyber":
+            cols = max(8, int(w // 28))
+            c.left = r.randint(0, cols - 1) * (w / cols) + 2
+            c.top = r.uniform(h * 0.05, h * 0.95) if y_range else r.uniform(-40, -10)
+            c.scale = 1.0
+            c.opacity = r.uniform(0.75, 1.0)
+            self.state = "active"
+
+        elif self.mode == "fireflies":
+            c.left = r.uniform(20, max(25.0, w - 25))
+            c.top = r.uniform(h * 0.1, h * 0.9)
+            self.is_lit = r.random() < 0.5
+            c.opacity = r.uniform(0.7, 1.0) if self.is_lit else r.uniform(0.0, 0.08)
+            c.scale = r.uniform(0.85, 1.15) if self.is_lit else r.uniform(0.5, 0.7)
+            self.blink_ticks = r.randint(1, 4)
+            self.state = "active"
+
+        elif self.mode in ("hearts", "embers"):
+            c.left = r.uniform(25, max(30.0, w - (c.width or 20) - 25))
+            c.top = r.uniform(h * 0.15, h * 0.82)
+            already_visible = r.random() < 0.5
+            if already_visible:
+                c.scale = r.uniform(0.85, 1.15)
+                c.opacity = r.uniform(0.85, 1.0)
+                self.sub_state = "floating"
+                self.phase_ticks = r.randint(2, 4)
+            else:
+                c.scale = 0.01
+                c.opacity = 0.0
+                self.sub_state = "hidden"
+                self.phase_ticks = r.randint(1, 3)
+            self.state = "active"
+
+        elif self.mode in ("cosmic", "stardust"):
+            cx, cy = w / 2, h / 2
+            self.angle = r.uniform(0, math.tau)
+            max_d = max(w, h) * 0.65
+            self.dist = r.uniform(15, max_d * 0.8) if y_range else r.uniform(10, 30)
+            progress = min(1.0, self.dist / max_d)
+            c.scale = 0.2 + progress * 0.9
+            c.opacity = min(1.0, 0.2 + progress * 0.8)
+            c.left = cx + math.cos(self.angle) * self.dist - ((c.width or 20) / 2)
+            c.top = cy + math.sin(self.angle) * self.dist - ((c.height or 20) / 2)
+            self.state = "active"
+
+        else:
+            c.left = r.uniform(-4, w - self.d + 4)
+            c.top = r.uniform(h * 0.3, h * 1.02) if y_range is None else r.uniform(h * y_range[0], h * y_range[1])
+            c.opacity = 0
+            self.state = "rise"
 
     def rise(self, tick: float, h: float, ticks: int | None = None) -> None:
         c, r = self.ctrl, self.rnd
         self.left = ticks if ticks is not None else r.randint(4, 8)
         secs = self.left * tick + 2.0
-        speed = r.uniform(5, 13) * (1.25 if self.d < 5 else 0.85)  # small ones are 'nearer'
+        base_speed = r.uniform(5, 13) * (1.25 if self.d < 5 else 0.85)
         c.animate_position = _anim(secs * 1000, LINEAR)
         c.animate_opacity = _anim(2200)
-        c.top = (c.top or 0) - speed * secs
+
+        c.top = (c.top or 0) - base_speed * secs
         c.left = (c.left or 0) + r.uniform(-26, 26)
         c.opacity = self.peak
         self.state = "twinkle"
 
     def step(self, tick: float, w: float, h: float) -> None:
+        c, r = self.ctrl, self.rnd
+
+        if self.mode == "sakura":
+            if (c.top or 0) > h + 20 or (c.left or 0) > w + 35 or (c.left or 0) < -35:
+                c.animate_position = c.animate_rotation = SNAP
+                c.left = r.uniform(-20, w * 0.85)
+                c.top = r.uniform(-35, -15)
+                c.rotate = r.uniform(0, math.tau)
+                if self.variants and isinstance(c.content, ft.Image):
+                    c.content.src = r.choice(self.variants)
+            else:
+                fall_step = r.uniform(40, 75)
+                wind = r.uniform(12, 28) + math.sin(time.monotonic() + self.phase) * 16
+                c.animate_position = _anim(tick * 1150, LINEAR)
+                c.animate_rotation = _anim(tick * 1150, LINEAR)
+                c.top = (c.top or 0) + fall_step
+                c.left = (c.left or 0) + wind
+                c.rotate = (c.rotate or 0) + r.uniform(0.5, 1.4)
+            return
+
+        if self.mode == "snow":
+            if (c.top or 0) > h + 15:
+                c.animate_position = SNAP
+                c.left = r.uniform(0, max(1.0, w - (c.width or 16)))
+                c.top = r.uniform(-30, -10)
+                if self.variants and isinstance(c.content, ft.Image):
+                    c.content.src = r.choice(self.variants)
+            else:
+                fall_step = r.uniform(30, 55)
+                c.animate_position = _anim(tick * 1150, LINEAR)
+                c.top = (c.top or 0) + fall_step
+                c.left = (c.left or 0) + r.uniform(-8, 8)
+            return
+
+        if self.mode == "cyber":
+            if (c.top or 0) > h + 25:
+                c.animate_position = SNAP
+                cols = max(8, int(w // 28))
+                c.left = r.randint(0, cols - 1) * (w / cols) + 2
+                c.top = r.uniform(-40, -10)
+            else:
+                fall_step = r.uniform(90, 160)
+                c.animate_position = _anim(tick * 1150, LINEAR)
+                c.top = (c.top or 0) + fall_step
+                if self.variants and isinstance(c.content, ft.Image):
+                    c.content.src = r.choice(self.variants)
+            return
+
+        if self.mode == "fireflies":
+            c.animate_position = _anim(tick * 1000, INOUT)
+            c.top = min(max(h * 0.08, (c.top or 0) + r.uniform(-25, 25)), h * 0.92)
+            c.left = min(max(15, (c.left or 0) + r.uniform(-25, 25)), max(20.0, w - 25))
+            self.blink_ticks -= 1
+            if self.blink_ticks <= 0:
+                self.is_lit = not self.is_lit
+                dur = r.uniform(700, 1400)
+                c.animate_opacity = _anim(dur, INOUT)
+                c.animate_scale = _anim(dur, INOUT)
+                if self.is_lit:
+                    c.opacity = r.uniform(0.7, 1.0)
+                    c.scale = r.uniform(0.85, 1.15)
+                    self.blink_ticks = r.randint(2, 5)
+                else:
+                    c.opacity = r.uniform(0.0, 0.08)
+                    c.scale = r.uniform(0.5, 0.7)
+                    self.blink_ticks = r.randint(1, 3)
+            return
+
+        if self.mode in ("hearts", "embers"):
+            if self.sub_state == "popin":
+                c.animate_scale = _anim(500, ft.AnimationCurve.EASE_OUT_BACK)
+                c.animate_opacity = _anim(400, ft.AnimationCurve.EASE_OUT)
+                c.scale = r.uniform(0.85, 1.15)
+                c.opacity = r.uniform(0.85, 1.0)
+                self.sub_state = "floating"
+                self.phase_ticks = r.randint(2, 4)
+            elif self.sub_state == "floating":
+                self.phase_ticks -= 1
+                c.animate_position = _anim(tick * 1000, INOUT)
+                c.top = (c.top or 0) - r.uniform(4, 10)
+                c.left = (c.left or 0) + r.uniform(-5, 5)
+                if self.phase_ticks <= 0:
+                    self.sub_state = "popout"
+            elif self.sub_state == "popout":
+                c.animate_scale = _anim(450, ft.AnimationCurve.EASE_IN_BACK)
+                c.animate_opacity = _anim(350, ft.AnimationCurve.EASE_IN)
+                c.scale = 0.01
+                c.opacity = 0.0
+                self.sub_state = "hidden"
+                self.phase_ticks = r.randint(1, 2)
+            elif self.sub_state == "hidden":
+                self.phase_ticks -= 1
+                if self.phase_ticks <= 0:
+                    c.animate_position = c.animate_scale = c.animate_opacity = SNAP
+                    c.left = r.uniform(20, max(25.0, w - (c.width or 20) - 20))
+                    c.top = r.uniform(h * 0.15, h * 0.82)
+                    c.scale = 0.01
+                    c.opacity = 0.0
+                    if self.variants and isinstance(c.content, ft.Image):
+                        c.content.src = r.choice(self.variants)
+                    self.sub_state = "popin"
+            return
+
+        if self.mode in ("cosmic", "stardust"):
+            cx, cy = w / 2, h / 2
+            max_d = max(w, h) * 0.65
+            if self.dist > max_d or (c.left or 0) < -40 or (c.left or 0) > w + 40 or (c.top or 0) < -40 or (c.top or 0) > h + 40:
+                c.animate_position = c.animate_scale = c.animate_opacity = SNAP
+                self.angle = r.uniform(0, math.tau)
+                self.dist = r.uniform(10, 30)
+                c.scale = 0.2
+                c.opacity = 0.15
+                c.left = cx + math.cos(self.angle) * self.dist - ((c.width or 20) / 2)
+                c.top = cy + math.sin(self.angle) * self.dist - ((c.height or 20) / 2)
+                if self.variants and isinstance(c.content, ft.Image):
+                    c.content.src = r.choice(self.variants)
+            else:
+                self.dist += r.uniform(40, 75)
+                progress = min(1.0, self.dist / max_d)
+                c.animate_position = _anim(tick * 1150, LINEAR)
+                c.animate_scale = _anim(tick * 1150, LINEAR)
+                c.animate_opacity = _anim(tick * 1150, LINEAR)
+                c.left = cx + math.cos(self.angle) * self.dist - ((c.width or 20) / 2)
+                c.top = cy + math.sin(self.angle) * self.dist - ((c.height or 20) / 2)
+                c.scale = 0.2 + progress * 1.0
+                c.opacity = min(1.0, 0.2 + progress * 0.8)
+            return
+
+        # Default motes fallback
         if self.state == "spawn":
             self.spawn(w, h)
         elif self.state == "rise":
@@ -216,7 +580,7 @@ class _Mote:
         c, r = self.ctrl, self.rnd
         c.animate_position = c.animate_opacity = SNAP
         if c.top is None or c.top < -20 or c.top > h:
-            c.left, c.top = r.uniform(0, w - self.d), r.uniform(h * 0.1, h * 0.95)
+            c.left, c.top = r.uniform(0, max(1.0, w - self.d)), r.uniform(h * 0.1, h * 0.95)
         c.opacity = self.peak * 0.45
         self.state = "rise"
 
@@ -224,6 +588,12 @@ class _Mote:
 def _mote_dot(d: float, color: str, peak: float, glow: bool) -> ft.Container:
     dot = fx.soft_dot(d, color, op=1.0, glow=glow)
     dot.opacity = 0
+    dot.animate_position = SNAP
+    dot.animate_opacity = SNAP
+    dot.animate_scale = SNAP
+    dot.animate_rotation = SNAP
+    dot.scale = 1.0
+    dot.rotate = 0.0
     return dot
 
 
@@ -261,6 +631,7 @@ class MindSpace(ft.Container):
         self._wake = asyncio.Event()
         self._loop_gen = 0
         self._tick_n = 0
+        self._particle_pref = "auto"
         self._tones = tones()
 
         self._base = ft.Container(left=0, top=0, right=0, bottom=0)
@@ -302,8 +673,28 @@ class MindSpace(ft.Container):
         th.on_theme_change(self)
 
     # ---------------------------------------------------------------- painting / layout
+    def _effective_particle_mode(self) -> str:
+        pref = self._particle_pref
+        if pref in ("", "auto", "particles_auto"):
+            return cos.theme_default_particle_mode(th.current().id)
+        if pref in cos.COSMETIC_BY_ID:
+            return cos.COSMETIC_BY_ID[pref].particle_mode or "motes"
+        return pref
+
+    def set_particle_style(self, particle_id_or_mode: str) -> None:
+        """Equip a background particle effect ('particles_sakura', 'sakura', 'auto', etc.)."""
+        self._particle_pref = particle_id_or_mode or "auto"
+        self._paint()
+        for m in self._motes:
+            m.spawn(self._w, self._h, y_range=(0.05, 0.95))
+        if _mounted(self):
+            with contextlib.suppress(Exception):
+                self.update()
+
     def _paint(self) -> None:
         t = self._tones = tones()
+        mode = self._effective_particle_mode()
+        mote_colors = _PARTICLE_PALETTES.get(mode, t.motes)
         self.bgcolor = t.base[1]
         self._base.gradient = ft.LinearGradient(begin=ft.Alignment.TOP_CENTER,
                                                 end=ft.Alignment.BOTTOM_CENTER,
@@ -311,6 +702,21 @@ class MindSpace(ft.Container):
         for b, (col, _) in zip(self._blobs, t.nebula, strict=False):
             b.gradient = ft.RadialGradient(colors=[a(col, 1), a(col, 0.45), a(col, 0.12),
                                                    a(col, 0)], stops=[0, 0.35, 0.65, 1])
+        if mode == "snow":
+            # Apply a cool winter blueish ambient tint to the scene nebula/base without tinting snowflakes
+            self._base.gradient = ft.LinearGradient(
+                begin=ft.Alignment.TOP_CENTER,
+                end=ft.Alignment.BOTTOM_CENTER,
+                colors=["#061325", "#091D38", "#030A14"],
+                stops=[0, 0.45, 1],
+            )
+            snow_nebulas = (("#1E5F8A", 0.48), ("#0077B6", 0.42), ("#48CAE4", 0.28),
+                            ("#03045E", 0.60), ("#90E0EF", 0.22))
+            for b, (col, _) in zip(self._blobs, snow_nebulas, strict=False):
+                b.gradient = ft.RadialGradient(
+                    colors=[a(col, 1), a(col, 0.45), a(col, 0.12), a(col, 0)],
+                    stops=[0, 0.35, 0.65, 1],
+                )
         for drifter, (_, op) in zip(self._drift, t.nebula, strict=False):
             drifter.base_op = op
         for i, (b, (_, _, d)) in enumerate(zip(self._bokeh, _BOKEH, strict=False)):
@@ -320,7 +726,7 @@ class MindSpace(ft.Container):
         for i, d in enumerate(self._drift[len(self._blobs):]):
             d.base_op = (0.22, 0.16, 0.13)[i % 3] * t.strength
         for i, m in enumerate(self._motes):
-            fx._repaint_dot(m.ctrl, t.motes[i % len(t.motes)])
+            m.configure_shape(mote_colors[i % len(mote_colors)], mode)
         self._vignette.gradient = ft.RadialGradient(
             center=ft.Alignment(0, -0.15), radius=1.05,
             colors=[a(t.vignette, 0), a(t.vignette, 0), a(t.vignette, 0.3),
@@ -340,8 +746,7 @@ class MindSpace(ft.Container):
         self._draw_lines()
         for m in self._motes:
             if m.ctrl.top is None:
-                m.ctrl.left = self._rnd.uniform(0, w - m.d)
-                m.ctrl.top = self._rnd.uniform(h * 0.05, h * 0.98)
+                m.spawn(w, h, y_range=(0.05, 0.95))
 
     def _draw_stars(self) -> None:
         t, w, h = self._tones, self._w, self._h
@@ -506,8 +911,8 @@ class MindSpace(ft.Container):
             for m in self._motes:
                 c = m.ctrl
                 if c.top is None or c.top < -10 or c.top > h:
-                    c.left, c.top = self._rnd.uniform(0, w - m.d), self._rnd.uniform(0, h)
-                m.rise(self.tick_s, h, ticks=self._rnd.randint(1, 7))
+                    m.spawn(w, h, y_range=(0.05, 0.95))
+                m.step(self.tick_s, w, h)
         else:
             for m in self._motes:
                 m.step(self.tick_s, w, h)

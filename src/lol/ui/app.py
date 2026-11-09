@@ -20,7 +20,8 @@ from datetime import date, datetime
 
 import flet as ft
 
-from lol.core import i18n, pins, premium, welcome
+from lol.core import cosmetics as cos
+from lol.core import i18n, pins, premium, update_checker, welcome
 from lol.core.game import COINS_BY_DIFFICULTY, Game
 from lol.core.models import RANK_NAMES, Completion
 from lol.core.progression import bar_steps, xp_for_level
@@ -28,7 +29,11 @@ from lol.ui import ambient, audio, avatars, notify, sfx, voice
 from lol.ui import components as ui
 from lol.ui import effects as fx
 from lol.ui import theme as th
-from lol.ui.cloud_sync import CloudSyncManager
+from lol.ui.cloud_sync import (
+    CloudSyncManager,
+    prompt_first_open_google_login,
+    prompt_store_update,
+)
 from lol.ui.screens import common
 from lol.ui.theme import C, Radius, Space, Type
 
@@ -139,6 +144,7 @@ class App:
         # --- v1.3 ambience: living mind-space background, glass panels, quest-clear juice ---
         ambient.set_glass_cap("frost" if p.reduce_effects else "blur")
         self.space = ambient.MindSpace()
+        self.space.set_particle_style(p.particle_id)
         self.fx_cleared = fx.QuestCleared()
         self.fx_burst = ambient.ParticleBurst()
         self.focus_ends: datetime | None = None  # running focus countdown -> 'timer done' alert
@@ -146,7 +152,7 @@ class App:
         self._welcomed_at: float | None = None  # wall clock of Luma's last welcome back
         self._welcome_variant: int | None = None
 
-        # --- header: name + coins, overall XP bar, floaters ---
+        # --- header: name + title + coins, overall XP bar, floaters ---
         self.xp_bar = ui.XpBar(p.xp / xp_for_level(p.level), level=p.level,
                                caption=self._xp_caption(),
                                on_rollover=self._level_seal)
@@ -155,16 +161,37 @@ class App:
         self.xp_float = ui.FloatingGain(right=0, top=56)
         self.coin_float = ui.FloatingGain(right=96, top=56)
         self.name = ft.Text(p.name, size=Type.HEADLINE, weight=ft.FontWeight.W_900,
-                            color=C.TEXT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
-                            expand=True)
-        self.avatar = avatars.bubble(p.avatar_id, 38, custom=p.avatar_customization)
+                            color=C.TEXT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._title_text = ft.Text("", size=10, weight=ft.FontWeight.W_800, color=C.PRIMARY)
+        self.title_badge = ft.Container(
+            self._title_text,
+            padding=ft.Padding.symmetric(horizontal=7, vertical=2),
+            border_radius=Radius.PILL,
+            visible=False,
+        )
+        self.avatar = avatars.bubble(
+            p.avatar_id,
+            52,
+            custom=p.avatar_customization,
+            frame_id=p.frame_id,
+            pet_id=p.pet_id,
+        )
         self.avatar.on_click = lambda e: self.open_sub("profile")
         self.avatar.tooltip = "Profile"
+        self._sync_cosmetics_header()
         self.header = ambient.apply_glass(ft.Container(
             ft.Stack([
                 ft.Column([
-                    ft.Row([self.avatar, self.name, self.coins], spacing=Space.SM + 2,
-                           vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    ft.Row([
+                        self.avatar,
+                        ft.Column(
+                            [self.name, self.title_badge],
+                            spacing=2,
+                            tight=True,
+                            expand=True,
+                        ),
+                        self.coins,
+                    ], spacing=Space.SM + 2, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     self.xp_bar,
                 ], spacing=Space.SM),
                 self.xp_float, self.coin_float,
@@ -291,12 +318,59 @@ class App:
         sfx.play("skill_acquired", 0.7)
         await self.fx_reveal.show(title, subtitle)
 
+    def _sync_cosmetics_header(self) -> None:
+        """Apply equipped title badge(s), XP bar FX style, and background particle mode."""
+        p = self.game.profile
+        self.space.set_particle_style(p.particle_id)
+        equipped = getattr(p, "equipped_titles", []) or []
+        titles_to_show = [t for t in equipped if t and t != "title_none"]
+        if not titles_to_show and p.title_id and p.title_id != "title_none":
+            titles_to_show = [p.title_id]
+
+        if titles_to_show:
+            spans: list[ft.TextSpan] = []
+            rainbow_palette = [
+                "#FF595E", "#FF924C", "#FFCA3A", "#8AC926",
+                "#1982C4", "#6A4C93", "#FF595E", "#FF924C",
+                "#FFCA3A", "#8AC926", "#1982C4",
+            ]
+            for i, tid in enumerate(titles_to_show[:3]):
+                if i > 0:
+                    spans.append(ft.TextSpan(" · ", style=ft.TextStyle(color=C.TEXT_DIM, size=9)))
+                t_item = cos.get_cosmetic(tid, "title")
+                txt = t_item.badge_text.upper() if t_item.badge_text else t_item.name.upper()
+                if tid == "title_beta":
+                    # Distinct prismatic per-letter rainbow styling for Beta Testers
+                    for c_idx, char in enumerate(txt):
+                        c_color = rainbow_palette[c_idx % len(rainbow_palette)]
+                        spans.append(ft.TextSpan(char, style=ft.TextStyle(color=c_color, weight=ft.FontWeight.W_900, size=10)))
+                else:
+                    spans.append(ft.TextSpan(txt, style=ft.TextStyle(color=t_item.color, weight=ft.FontWeight.W_800, size=10)))
+
+            self._title_text.value = None
+            self._title_text.spans = spans
+            first_col = cos.get_cosmetic(titles_to_show[0], "title").color
+            self.title_badge.bgcolor = C.a(first_col, 0.14)
+            self.title_badge.border = ft.Border.all(1.0, C.a(first_col, 0.45))
+            self.title_badge.visible = True
+        else:
+            self._title_text.spans = []
+            self._title_text.value = ""
+            self.title_badge.visible = False
+
+        fx_item = cos.get_cosmetic(p.fx_style_id, "fx_style")
+        if fx_item.id != "fx_default":
+            self.xp_bar.set_color(fx_item.color, fx_item.secondary_color)
+        else:
+            self.xp_bar.set_color(C.PRIMARY, None)
+
     def apply_settings(self) -> None:
         """Profile settings read outside the profile (Reduce effects is a module switch)."""
         reduce = self.game.profile.reduce_effects
         i18n.set_language(self.game.profile.language)
         fx.set_reduce(reduce)
         self.space.set_reduce(None)
+        self._sync_cosmetics_header()
         ambient.set_glass_cap("frost" if reduce else "blur", self.page)
         if hasattr(self, "nav"):
             self.nav.refresh_labels()
@@ -315,11 +389,18 @@ class App:
         ui.refresh(self.nav)
 
     def refresh_profile(self) -> None:
-        """Header avatar + name after a profile edit (pops the avatar)."""
+        """Header avatar + name + cosmetics after a profile or shop edit (pops the avatar)."""
         p = self.game.profile
         self.name.value = p.name
-        avatars.restyle_bubble(self.avatar, p.avatar_id, custom=p.avatar_customization)
-        ui.refresh(self.name, self.avatar)
+        avatars.restyle_bubble(
+            self.avatar,
+            p.avatar_id,
+            custom=p.avatar_customization,
+            frame_id=p.frame_id,
+            pet_id=p.pet_id,
+        )
+        self._sync_cosmetics_header()
+        ui.refresh(self.name, self.title_badge, self.avatar, self.xp_bar)
         if self.avatar.page:
             self.page.run_task(ui.pop, self.avatar, 1.18)
 
@@ -627,6 +708,16 @@ class App:
         """Rebuild the visible screen (e.g. after a theme switch recolors Path chips)."""
         if not self.connected():
             return  # a closed web session whose theme callback is still registered
+        p = self.game.profile
+        avatars.restyle_bubble(
+            self.avatar,
+            p.avatar_id,
+            custom=p.avatar_customization,
+            frame_id=p.frame_id,
+            pet_id=p.pet_id,
+        )
+        self._sync_cosmetics_header()
+        ui.refresh(self.avatar, self.title_badge, self.xp_bar)
         screen = self.screens[self.tab]
         getattr(screen, "restyle", screen.render)()
 
@@ -634,13 +725,19 @@ class App:
         """After a restore: header, settings, theme, badges and the visible screen."""
         p = self.game.profile
         self.name.value = p.name
-        avatars.restyle_bubble(self.avatar, p.avatar_id, custom=p.avatar_customization)
+        avatars.restyle_bubble(
+            self.avatar,
+            p.avatar_id,
+            custom=p.avatar_customization,
+            frame_id=p.frame_id,
+            pet_id=p.pet_id,
+        )
         self.xp_bar.set(p.xp / xp_for_level(p.level), caption=self._xp_caption(), level=p.level)
         self.coins.set(p.coins)
         self.apply_settings()
         self.screens[TAB_TODAY].bill_voiced = True  # no surprise voice after a restore
         th.apply_theme(self.page, p.theme_id if p.theme_id in th.THEMES else th.DEFAULT_THEME)
-        ui.refresh(self.name, self.avatar, self.coins)
+        ui.refresh(self.name, self.title_badge, self.avatar, self.coins, self.xp_bar)
         self.update_badges()
         self.rerender()
         self.page.update()
@@ -658,6 +755,7 @@ def main(page: ft.Page) -> None:
     ui.use_haptics(ft.HapticFeedback())
 
     app = App(page)
+    ui.set_currency(getattr(app.game.profile, "currency", "₱"))
     app.cloud.init_page(page)
     audio.init(page, settings=lambda: app.game.profile)  # voice_on / voice_volume, read live
     sfx.init(page, settings=lambda: app.game.profile)  # sfx_on / sfx_volume / reduce_effects
@@ -691,20 +789,43 @@ def main(page: ft.Page) -> None:
     if app.cloud.is_signed_in:
         page.run_task(app.cloud.sync)
 
+    async def _startup_prompts(onboarded: bool) -> None:
+        await asyncio.sleep(0.8)
+        info = await update_checker.check_for_store_update_async()
+        if info.available:
+            prompt_store_update(app, info)
+            return
+
+        def _after_google_prompt() -> None:
+            if onboarded and not app.game.profile.avatar_configured:
+                avatars.prompt_existing_user_avatar(app)
+                return
+
+            def _after_whats_new() -> None:
+                if onboarded:
+                    from lol.ui.daily_login_dialog import prompt_daily_login
+
+                    prompt_daily_login(app)
+
+            from lol.ui.whats_new_dialog import prompt_whats_new
+
+            prompt_whats_new(app, on_done=_after_whats_new)
+
+        if not app.cloud.is_signed_in:
+            prompt_first_open_google_login(app, on_done=_after_google_prompt)
+            return
+        _after_google_prompt()
+
     if app.game.profile.onboarded:
         mount_shell(app)
         sfx.play("download_complete", 0.7)  # app opened; Luma's welcome back follows it
         app.greet_on_open()
         app.resync_reminders(2.0)
-        if not app.game.profile.avatar_configured:
-            async def _prompt_avatar() -> None:
-                await asyncio.sleep(0.9)
-                avatars.prompt_existing_user_avatar(app)
-
-            page.run_task(_prompt_avatar)
+        page.run_task(_startup_prompts, True)
         return
 
     run_onboarding(app)
+    page.run_task(_startup_prompts, False)
 
 
 def run_onboarding(app: App, *, redo: bool = False) -> None:
@@ -752,7 +873,12 @@ def mount_shell(app: App, tab: int = TAB_TODAY, *, fade_in: bool = False) -> Non
                          animate_offset=th.Motion.anim(450, th.Motion.EASE_CUBIC))
     page.bottom_appbar = app.nav  # ArcaneNavBar: Today · Quests · [center] · Rewards · More
     fx.install_distortion(page, root=shell)  # reward impacts punch/jitter the app content
-    page.add(ft.Stack([app.space, ft.SafeArea(shell, expand=True)], expand=True))
+    page.add(
+        ft.Stack(
+            [app.space, ft.SafeArea(shell, expand=True, maintain_bottom_view_padding=True)],
+            expand=True,
+        )
+    )
     app.refresh_center()
     app.go(tab)
     page.run_task(app.nav.slot.spin, lambda: app.game.profile.reduce_effects)

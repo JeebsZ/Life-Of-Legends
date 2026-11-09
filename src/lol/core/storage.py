@@ -54,6 +54,7 @@ from typing import Any
 
 from lol.core import avatar_catalog
 from lol.core.catalog import FREE_THEMES
+from lol.core.finance import ExpenseEntry, SavingsGoal, SplitBill, SplitMember
 from lol.core.models import (
     DEFAULT_NOTIFY_SOUND,
     MODULES,
@@ -106,7 +107,7 @@ V0_STAT_TO_PATH = {"health": "warrior", "mind": "scholar", "wealth": "steward"}
 LIST_KEYS = ("quests", "bills", "rewards", "logs", "side_quests", "skills", "templates",
              "hidden_templates", "focus_sessions", "workouts", "workout_templates", "sleep",
              "water", "energy", "weights", "meals", "custom_foods", "favorite_foods", "runs",
-             "decks", "study_sessions")
+             "decks", "study_sessions", "expenses", "split_bills", "savings_goals")
 STR_LIST_KEYS = ("hidden_templates", "favorite_foods")
 PHOTO_DIR = "meal_photos"
 
@@ -186,6 +187,43 @@ def _profile(raw: dict[str, Any], schema: int = SCHEMA) -> Profile:
     profile.avatar_customization = avatar_catalog.sanitize(av_built)
     profile.avatar_configured = bool(raw.get("avatar_configured", False))
     profile.avatar_bonus_claimed = bool(raw.get("avatar_bonus_claimed", False))
+    from lol.core import cosmetics as cos
+
+    raw_owned_cos = raw.get("owned_cosmetics")
+    profile.owned_cosmetics = (
+        [str(x) for x in raw_owned_cos if isinstance(x, str)]
+        if isinstance(raw_owned_cos, list)
+        else []
+    )
+    for free_id in cos.FREE_COSMETICS:
+        if free_id not in profile.owned_cosmetics:
+            profile.owned_cosmetics.append(free_id)
+    profile.particle_id = cos.get_cosmetic(raw.get("particle_id"), "particles").id
+    profile.frame_id = cos.get_cosmetic(raw.get("frame_id"), "frame").id
+    profile.title_id = cos.get_cosmetic(raw.get("title_id"), "title").id
+    raw_equipped_titles = raw.get("equipped_titles")
+    if isinstance(raw_equipped_titles, list):
+        profile.equipped_titles = [
+            str(x) for x in raw_equipped_titles
+            if isinstance(x, str) and x in cos.COSMETIC_BY_ID and x != "title_none"
+        ][:3]
+    elif profile.title_id and profile.title_id != "title_none":
+        profile.equipped_titles = [profile.title_id]
+    else:
+        profile.equipped_titles = []
+    profile.pet_id = cos.get_cosmetic(raw.get("pet_id"), "pet").id
+    profile.fx_style_id = cos.get_cosmetic(raw.get("fx_style_id"), "fx_style").id
+    profile.daily_login_streak = int(raw.get("daily_login_streak", 0) or 0)
+    profile.last_login_claim = str(raw.get("last_login_claim", "") or "")
+    raw_claimed = raw.get("daily_login_claimed_days")
+    profile.daily_login_claimed_days = (
+        [int(x) for x in raw_claimed if isinstance(x, (int, str)) and str(x).isdigit()]
+        if isinstance(raw_claimed, list)
+        else []
+    )
+    cur = raw.get("currency")
+    profile.currency = cur if isinstance(cur, str) and cur.strip() else "₱"
+    profile.last_seen_changelog = str(raw.get("last_seen_changelog", "") or "")
     return profile
 
 
@@ -298,6 +336,12 @@ def _reward(raw: dict[str, Any]) -> Reward:
 _ID_NUM = re.compile(r"^[a-z]+(\d+)$")
 
 
+def _split_bill(raw: dict[str, Any]) -> SplitBill:
+    sb = _build(SplitBill, raw)
+    sb.members = [_build(SplitMember, m) for m in raw.get("members", []) if isinstance(m, dict)]
+    return sb
+
+
 def _min_next_id(data: SaveData) -> int:
     """1 + the biggest numeric id suffix in use, so new ids never collide (built-in template
     ids like "t-skin-care" have no number and are ignored)."""
@@ -305,7 +349,8 @@ def _min_next_id(data: SaveData) -> int:
                               data.side_quests, data.templates, data.focus_sessions,
                               data.workouts, data.workout_templates, data.sleep, data.water,
                               data.energy, data.weights, data.meals, data.custom_foods, data.runs,
-                              data.decks, data.study_sessions,
+                              data.decks, data.study_sessions, data.expenses, data.split_bills,
+                              data.savings_goals,
                               [c for d in data.decks for c in d.cards])
            for x in group]
     nums = [int(m.group(1)) for i in ids if (m := _ID_NUM.match(str(i)))]
@@ -323,6 +368,10 @@ def from_dict(raw: dict[str, Any], today: date | None = None) -> SaveData:
         profile=_profile(raw.get("profile", {}), raw["schema"]),
         quests=[_build(Quest, q) for q in raw.get("quests", [])],
         bills=[_bill(b) for b in raw.get("bills", [])],
+        expenses=[_build(ExpenseEntry, e) for e in raw.get("expenses", []) if isinstance(e, dict)],
+        split_bills=[_split_bill(sb) for sb in raw.get("split_bills", []) if isinstance(sb, dict)],
+        savings_goals=[_build(SavingsGoal, sg) for sg in raw.get("savings_goals", []) if isinstance(sg, dict)],
+        saved_qr_path=str(raw.get("saved_qr_path", "") or ""),
         rewards=[_reward(r) for r in raw.get("rewards", [])],
         logs=[_build(LogEntry, e) for e in raw.get("logs", [])],
         side_quests=[_side_quest(sq) for sq in raw.get("side_quests", [])],
@@ -349,6 +398,9 @@ def from_dict(raw: dict[str, Any], today: date | None = None) -> SaveData:
         study_settings=(_build(StudySettings, raw["study_settings"])
                         if isinstance(raw.get("study_settings"), dict) else StudySettings()),
         premium=_premium(raw.get("premium")),
+        star_iron=int(raw.get("star_iron", 0)),
+        exercise_prs={str(k): float(v) for k, v in (raw.get("exercise_prs") or {}).items()},
+        unlocked_workout_traits=[str(x) for x in raw.get("unlocked_workout_traits", [])],
         next_id=raw.get("next_id", 1),
         legacy=raw.get("legacy"),
     )
@@ -500,7 +552,8 @@ def _validate(data: SaveData) -> None:
                     check_day(d, f"side quest {sq.id}")
     for name in ("quests", "bills", "rewards", "logs", "side_quests", "templates",
                  "focus_sessions", "workouts", "workout_templates", "sleep", "water", "energy",
-                 "weights", "meals", "custom_foods", "runs", "decks", "study_sessions"):
+                 "weights", "meals", "custom_foods", "runs", "decks", "study_sessions",
+                 "savings_goals"):
         ids = [x.id for x in getattr(data, name)]
         if len(ids) != len(set(ids)):
             raise ValueError(f"duplicate ids in {name}")
@@ -532,6 +585,7 @@ def summary(data: SaveData) -> dict[str, int]:
         "study_decks": len(data.decks),
         "study_cards": sum(len(d.cards) for d in data.decks),
         "study_sessions": len(data.study_sessions),
+        "savings_goals": len(data.savings_goals),
     }
 
 

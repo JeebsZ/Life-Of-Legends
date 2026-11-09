@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import flet as ft
 
+from lol.core import cosmetics as cos
 from lol.core.game import level_from_total
 from lol.core.progression import bar_steps
 from lol.ui import audio, avatars, sfx
@@ -80,17 +81,37 @@ class ProfileScreen:
         top = max(th.PATH_IDS, key=lambda pid: p.path_xp.get(pid, 0))
         top_txt = (f"Strongest Path: {th.path_name(top)}" if p.path_xp.get(top, 0)
                    else "Complete a quest to start a Path")
-        bubble = avatars.bubble(p.avatar_id, 60, custom=p.avatar_customization)
-        bubble.on_click = lambda e: self._open_profile()
+        bubble = avatars.bubble(
+            p.avatar_id,
+            88,
+            custom=p.avatar_customization,
+            frame_id=p.frame_id,
+            pet_id=p.pet_id,
+        )
+        bubble.on_click = lambda e: avatars.open_character_editor(self.app, on_saved=self.restyle)
+        equipped_tids = getattr(p, "equipped_titles", []) or []
+        titles_to_show = [t for t in equipped_tids if t and t != "title_none"]
+        if not titles_to_show and p.title_id and p.title_id != "title_none":
+            titles_to_show = [p.title_id]
+
+        pet_item = cos.get_cosmetic(p.pet_id, "pet")
+        chips: list[ft.Control] = [
+            ui.chip(f"{p.coins:,}", icon=ui.COIN_ICON, color=C.ACCENT),
+            ui.chip(f"{total_path:,} XP earned", icon=ui.XP_ICON),
+        ]
+        for tid in reversed(titles_to_show[:3]):
+            t_item = cos.get_cosmetic(tid, "title")
+            if t_item.id != "title_none" and t_item.badge_text:
+                chips.insert(0, ui.chip(t_item.badge_text, icon=ft.Icons.MILITARY_TECH, color=t_item.color))
+        if pet_item.id != "pet_none" and pet_item.badge_text:
+            chips.append(ui.chip(f"{pet_item.badge_text} {pet_item.name}", color=pet_item.color))
         identity = ft.Row([
             bubble,
             ft.Column([
                 ft.Text(f"{p.name} · Lv {p.level}", size=Type.TITLE + 1,
                         weight=ft.FontWeight.W_900, color=C.TEXT, max_lines=1,
                         overflow=ft.TextOverflow.ELLIPSIS),
-                ft.Row([ui.chip(f"{p.coins:,}", icon=ui.COIN_ICON, color=C.ACCENT),
-                        ui.chip(f"{total_path:,} XP earned", icon=ui.XP_ICON)],
-                       spacing=Space.SM, wrap=True, run_spacing=Space.XS),
+                ft.Row(chips, spacing=Space.SM, wrap=True, run_spacing=Space.XS),
                 common.hint(top_txt),
             ], spacing=Space.XS, expand=True, tight=True),
             ft.IconButton(ft.Icons.EDIT, icon_color=C.PRIMARY, tooltip="Edit profile",
@@ -112,13 +133,21 @@ class ProfileScreen:
     def _open_profile(self) -> None:
         app, g = self.app, self.app.game
         p = g.profile
-        state = {"avatar": p.avatar_id}
         name = common.text_field("Your name")
         name.value = p.name
         name.max_length = 24
         name.capitalization = ft.TextCapitalization.WORDS
-        picker = avatars.AvatarPicker(p.avatar_id, size=46,
-                                      on_change=lambda aid: state.update(avatar=aid))
+        preview = ft.Container(
+            avatars.bubble(
+                p.avatar_id,
+                96,
+                custom=p.avatar_customization,
+                frame_id=p.frame_id,
+                pet_id=p.pet_id,
+            ),
+            alignment=ft.Alignment.CENTER,
+            padding=ft.Padding.symmetric(vertical=Space.XS),
+        )
 
         def open_customizer(_: Any = None) -> None:
             common.close(sheet)
@@ -131,7 +160,7 @@ class ProfileScreen:
                 name.error_text = "A name, nickname or title works"
                 name.update()
                 return
-            g.set_profile(name=text, avatar_id=state["avatar"])
+            g.set_profile(name=text)
             app.save()
             common.close(sheet)
             app.refresh_profile()
@@ -141,9 +170,8 @@ class ProfileScreen:
 
         name.on_submit = save
         sheet = common.open_sheet(app.page, "Edit profile", [
+            preview,
             name,
-            common.hint("Sigil ring color"),
-            picker,
             ft.Row([
                 common.secondary_button(
                     "Customize Avatar",

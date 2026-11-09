@@ -13,15 +13,18 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import flet as ft
 from flet.auth.providers import GoogleOAuthProvider
 
 from lol.core import cloud_config, cloud_save, storage
 from lol.core.cloud_save import SyncState
+from lol.core.update_checker import UpdateInfo
 from lol.ui import cloud_drive
+from lol.ui import components as ui
+from lol.ui.screens import common
+from lol.ui.theme import C, Space, Type
 
 if TYPE_CHECKING:
-    import flet as ft
-
     from lol.ui.app import App
 
 log = logging.getLogger(__name__)
@@ -42,6 +45,7 @@ class CloudSyncManager:
         self.state: SyncState = SyncState.IDLE
         self.error_message: str | None = None
         self.cloud_file_id: str | None = None
+        self.first_open_prompted: bool = False
         self.on_change: Callable[[], None] | None = None
 
     @property
@@ -67,6 +71,7 @@ class CloudSyncManager:
             self.user_name = data.get("user_name")
             self.access_token = data.get("access_token")
             self.refresh_token = data.get("refresh_token")
+            self.first_open_prompted = bool(data.get("first_open_prompted", False))
             last_sync_iso = data.get("last_sync_time")
             if last_sync_iso:
                 self.last_sync_time = cloud_save.parse_iso_time(last_sync_iso)
@@ -74,6 +79,11 @@ class CloudSyncManager:
                 self.state = SyncState.SYNCED
         except Exception as exc:  # noqa: BLE001
             log.debug("Could not restore cloud auth session: %s", exc)
+
+    def mark_first_open_prompted(self) -> None:
+        """Record that the initial Google sign-in prompt has been shown."""
+        self.first_open_prompted = True
+        self._save_auth_state()
 
     def _save_auth_state(self) -> None:
         try:
@@ -83,6 +93,7 @@ class CloudSyncManager:
                 "user_name": self.user_name,
                 "access_token": self.access_token,
                 "refresh_token": self.refresh_token,
+                "first_open_prompted": self.first_open_prompted,
                 "last_sync_time": (
                     self.last_sync_time.isoformat() if self.last_sync_time else None
                 ),
@@ -116,6 +127,12 @@ class CloudSyncManager:
             self.user_name = user.get("name") or self.user_email
             self.state = SyncState.IDLE
             self.error_message = None
+            if (
+                self.user_email
+                and self.user_email.strip().lower() in cloud_config.DEV_EMAILS
+                and self.app.game.unlock_dev()
+            ):
+                self.app.save()
             self._save_auth_state()
             self._notify()
             log.info("Signed in as %s", self.user_email)
@@ -136,8 +153,11 @@ class CloudSyncManager:
             client_secret=client_secret,
             redirect_url=cloud_config.GOOGLE_REDIRECT_URL,
         )
-        with contextlib.suppress(Exception):
+        try:
             await self.app.page.login(provider, scope=cloud_config.DRIVE_SCOPES)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Google login exception: %s", exc)
+            self.app.toast(f"Google sign-in error: {exc}", ft.Icons.ERROR_OUTLINE)
 
     async def sync(self) -> tuple[bool, str]:
         """Perform a bi-directional sync with Google Drive AppData."""
@@ -167,6 +187,7 @@ class CloudSyncManager:
                     )
                     if decision == "cloud_newer":
                         # Cloud save is newer: restore from cloud
+                        was_onboarded = self.app.game.profile.onboarded
                         new_data = cloud_save.deserialize_from_cloud(cloud_raw)
                         self.app.game.data = new_data
                         storage.save(new_data)
@@ -174,6 +195,13 @@ class CloudSyncManager:
                         self.state = SyncState.SYNCED
                         self._save_auth_state()
                         self._notify()
+                        with contextlib.suppress(Exception):
+                            if not was_onboarded and new_data.profile.onboarded:
+                                from lol.ui.app import TAB_TODAY, mount_shell
+
+                                self.app.page.controls.clear()
+                                mount_shell(self.app, TAB_TODAY, fade_in=True)
+                            self.app.reload_state()
                         self.app.toast("Restored newer save from Google Drive!", None)
                         return True, "Restored newer save from cloud"
 
@@ -224,3 +252,121 @@ class CloudSyncManager:
                 page_auth.user = None
         self._notify()
         self.app.toast("Signed out from Google Drive", None)
+
+
+async def open_store_url(page: ft.Page, url: str | None = None) -> None:
+    """Open the app's Google Play Store listing using Flet's UrlLauncher."""
+    target = url or cloud_config.PLAY_STORE_URL
+    with contextlib.suppress(Exception):
+        launcher_fn = getattr(page, "launch_url", None)
+        if callable(launcher_fn):
+            res = launcher_fn(target)
+            if hasattr(res, "__await__"):
+                await res
+            return
+        await ft.UrlLauncher().launch_url(target)
+
+
+def prompt_first_open_google_login(app: App, on_done: Any = None) -> None:
+    """Prompt the user on first open to sign in with Google for Cloud Save backup/restore."""
+    if app.cloud.is_signed_in:
+        if callable(on_done):
+            on_done()
+        return
+    app.cloud.mark_first_open_prompted()
+
+    sheet_ref: list[ft.BottomSheet] = []
+
+    async def sign_in(_: Any = None) -> None:
+        if sheet_ref:
+            common.close(sheet_ref[0])
+        await ui.buzz("light")
+        await app.cloud.start_login()
+        if callable(on_done):
+            on_done()
+
+    def skip(_: Any = None) -> None:
+        if sheet_ref:
+            common.close(sheet_ref[0])
+        if callable(on_done):
+            on_done()
+
+    body = ft.Column(
+        [
+            ft.Container(
+                ft.Icon(ft.Icons.CLOUD_DONE_ROUNDED, size=40, color=C.PRIMARY),
+                width=72,
+                height=72,
+                shape=ft.BoxShape.CIRCLE,
+                alignment=ft.Alignment.CENTER,
+                bgcolor=C.a(C.PRIMARY, 0.14),
+                border=ft.Border.all(1.5, C.a(C.PRIMARY, 0.65)),
+            ),
+            ft.Text(
+                "Back up your hero, quests, and progress to Google Drive — or restore an "
+                "existing save from another device.",
+                size=Type.BODY,
+                color=C.TEXT_DIM,
+                text_align=ft.TextAlign.CENTER,
+            ),
+            ft.Container(height=Space.XS),
+            common.primary_button("Sign in with Google", sign_in, icon=ft.Icons.LOGIN),
+            common.secondary_button("Continue as Guest", skip, color=C.TEXT_DIM),
+        ],
+        spacing=Space.SM,
+        tight=True,
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+    sheet_ref.append(common.open_sheet(app.page, "Sign in with Google", [body]))
+
+
+def prompt_store_update(app: App, info: UpdateInfo) -> None:
+    """Show a modal prompt when a newer version of the app is available in the Play Store."""
+    if not info.available:
+        return
+
+    sheet_ref: list[ft.BottomSheet] = []
+
+    async def go_store(_: Any = None) -> None:
+        if sheet_ref:
+            common.close(sheet_ref[0])
+        await ui.buzz("medium")
+        await open_store_url(app.page, info.store_url)
+
+    def later(_: Any = None) -> None:
+        if sheet_ref:
+            common.close(sheet_ref[0])
+
+    ver_badge = f"v{info.latest_version}" if info.latest_version else "New Version"
+    body = ft.Column(
+        [
+            ft.Container(
+                ft.Icon(ft.Icons.SYSTEM_UPDATE_ROUNDED, size=40, color=C.PRIMARY),
+                width=72,
+                height=72,
+                shape=ft.BoxShape.CIRCLE,
+                alignment=ft.Alignment.CENTER,
+                bgcolor=C.a(C.PRIMARY, 0.14),
+                border=ft.Border.all(1.5, C.a(C.PRIMARY, 0.65)),
+            ),
+            ft.Text(
+                "A newer version of LUMA is live on the Google Play Store! Tap below to "
+                "open the store and update for the latest features and fixes.",
+                size=Type.BODY,
+                color=C.TEXT_DIM,
+                text_align=ft.TextAlign.CENTER,
+            ),
+            ft.Container(height=Space.XS),
+            common.primary_button(
+                "Update in Play Store",
+                go_store,
+                icon=ft.Icons.OPEN_IN_NEW,
+            ),
+            common.secondary_button("Later", later, color=C.TEXT_DIM),
+        ],
+        spacing=Space.SM,
+        tight=True,
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+    sheet_ref.append(common.open_sheet(app.page, f"Update Available ({ver_badge})", [body]))
+

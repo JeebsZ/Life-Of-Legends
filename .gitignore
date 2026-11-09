@@ -8,6 +8,10 @@ build/
 tools/voice/bin/
 tools/voice/models/
 tools/voice/.venv/
+*.jks
+*.keystore
+.env
+.env.*
 # Sci-Fi UI SFX pack: license forbids redistributing the pack (only the used files are copied
 # into assets/sfx and assets/ogg). Keep the raw pack local.
 src/assets/customsfx/

@@ -139,9 +139,37 @@ async def nudge(ctrl: ft.Control) -> None:
     await pop(ctrl, Motion.PRESS_SCALE, 90)
 
 
+CURRENCIES: tuple[tuple[str, str], ...] = (
+    ("₱", "PHP (₱)"),
+    ("$", "USD ($)"),
+    ("€", "EUR (€)"),
+    ("£", "GBP (£)"),
+    ("¥", "JPY/CNY (¥)"),
+    ("₹", "INR (₹)"),
+    ("₩", "KRW (₩)"),
+    ("A$", "AUD (A$)"),
+    ("C$", "CAD (C$)"),
+    ("S$", "SGD (S$)"),
+)
+_active_currency: str = "₱"
+
+
+def set_currency(symbol: str) -> None:
+    """Set the active display currency symbol for the session."""
+    global _active_currency
+    if symbol and symbol.strip():
+        _active_currency = symbol.strip()
+
+
+def currency_symbol() -> str:
+    """Return the active display currency symbol."""
+    return _active_currency
+
+
 def peso(amount: float) -> str:
-    """₱1,250 or ₱1,250.50."""
-    return f"₱{amount:,.0f}" if float(amount).is_integer() else f"₱{amount:,.2f}"
+    """Format currency amount with the active currency symbol (e.g. $1,250 or ₱1,250.50)."""
+    sym = _active_currency
+    return f"{sym}{amount:,.0f}" if float(amount).is_integer() else f"{sym}{amount:,.2f}"
 
 
 def chip(text: str, *, icon: ft.IconData | None = None, color: str = C.PRIMARY,
@@ -240,9 +268,20 @@ class XpBar(ft.Column):
             height=height, border_radius=height / 2, bgcolor=color or C.PRIMARY, width=0,
             animate=Motion.anim(Motion.FILL_MS, Motion.EASE_CUBIC),
         )
+        # Sparkle shimmer glow that sweeps across the leading edge of the XP bar
+        self._sparkle = ft.Container(
+            width=height * 1.5,
+            height=height,
+            border_radius=height / 2,
+            bgcolor=ft.Colors.WHITE,
+            opacity=0.0,
+            scale=1.0,
+            animate_opacity=Motion.anim(200),
+            animate_scale=Motion.anim(200),
+        )
         self._track = ft.Container(
             height=height, border_radius=height / 2, bgcolor=C.a(C.TEXT, 0.10),
-            content=ft.Stack([self._fill]), width=width, expand=width is None,
+            content=ft.Stack([self._fill, self._sparkle]), width=width, expand=width is None,
             on_size_change=self._on_size, clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
         )
         self._level_text = ft.Text(
@@ -283,8 +322,18 @@ class XpBar(ft.Column):
             self._level_text.value = f"Lv {level}"
         refresh(self)
 
-    def set_color(self, color: str) -> None:
+    def set_color(self, color: str, secondary_color: str | None = None) -> None:
         self._fill.bgcolor = color
+        if secondary_color and secondary_color != color:
+            self._fill.gradient = ft.LinearGradient(
+                begin=ft.Alignment.CENTER_LEFT,
+                end=ft.Alignment.CENTER_RIGHT,
+                colors=[color, secondary_color],
+            )
+            self._fill.shadow = ft.BoxShadow(blur_radius=8, color=C.a(color, 0.45))
+        else:
+            self._fill.gradient = None
+            self._fill.shadow = None
         self._level_text.color = color
 
     async def play(self, steps: Sequence[float], *, caption: str | None = None,
@@ -293,11 +342,23 @@ class XpBar(ft.Column):
         on_rollover = on_rollover or self.on_rollover
         rolled = 0
         async with self._lock:
+            reduce = False
+            if self.page:
+                reduce = getattr(getattr(self.page, "_app_profile", None), "reduce_effects", False)
             for target in steps:
                 self.value = max(0.0, min(1.0, target))
-                self._fill.width = self._width * self.value
-                refresh(self._fill)
+                target_w = self._width * self.value
+                self._fill.width = target_w
+                if not reduce and target_w > 8:
+                    self._sparkle.left = max(0.0, target_w - self._fill.height)
+                    self._sparkle.opacity = 0.85
+                    self._sparkle.scale = 1.3
+                refresh(self._fill, self._sparkle)
                 await asyncio.sleep(Motion.FILL_MS / 1000)
+                if not reduce:
+                    self._sparkle.opacity = 0.0
+                    self._sparkle.scale = 1.0
+                    refresh(self._sparkle)
                 if target >= 1.0:  # crossed a level: snap empty, pop the label
                     rolled += 1
                     anim = self._fill.animate
@@ -305,7 +366,7 @@ class XpBar(ft.Column):
                     if self.level is not None:
                         self.level += 1
                         self._level_text.value = f"Lv {self.level}"
-                        self._level_text.scale = 1.4
+                        self._level_text.scale = 1.45 if not reduce else 1.15
                     refresh(self)
                     self._fill.animate = anim
                     self.value = 0.0
@@ -1410,21 +1471,17 @@ class ArcaneNavBar(ft.BottomAppBar):
         self.nav_row = ft.Row(row, spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER)
         self.nav_container = ft.Container(
             content=self.nav_row,
+            border=ft.Border(top=ft.BorderSide(1, C.a(C.PRIMARY, 0.22))),
             height=NAV_H,
-            padding=ft.Padding.symmetric(horizontal=4),
         )
         super().__init__(
-            content=ft.SafeArea(
-                self.nav_container,
-                top=False,
-                left=False,
-                right=False,
-                bottom=True,
-            ),
+            content=self.nav_container,
             bgcolor=C.a(C.SURFACE, 0.94),
-            padding=0,
+            padding=ft.Padding.only(left=4, right=4, top=0, bottom=6),
+            height=NAV_H + 6,
             elevation=0,
             clip_behavior=ft.ClipBehavior.NONE,
+            border_radius=ft.BorderRadius(top_left=22, top_right=22, bottom_left=0, bottom_right=0),
         )
         for n, b in (badges or {}).items():
             self.set_badge(n, b)

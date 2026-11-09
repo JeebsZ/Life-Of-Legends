@@ -14,7 +14,7 @@ import flet as ft
 
 from lol.core import storage
 from lol.ui import components as ui
-from lol.ui import sfx
+from lol.ui import permissions, sfx
 from lol.ui.screens import common
 from lol.ui.theme import C, Radius, Space, Type
 
@@ -85,6 +85,8 @@ class BackupScreen:
             ui.SectionHeader("Restore"),
             self._action("Restore from a JSON backup", "Replaces your current progress",
                          ft.Icons.UPLOAD_FILE, self._restore, color=C.DANGER),
+            ui.SectionHeader("Permissions & Local Save"),
+            permissions.permissions_card(self.app),
         ]
         self.list.controls = items
 

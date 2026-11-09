@@ -19,7 +19,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from lol.core.models import PremiumState, ThemeDef, UsageCount
 
@@ -419,6 +419,14 @@ class PremiumMixin:
     def theme_status(self, theme: ThemeDef, today: date) -> str:
         return coin_status(theme, theme.id in self.data.profile.owned_themes,
                            self.is_premium(today))
+
+    def cosmetic_status(self, item: Any, today: date) -> str:
+        owned = item.id in self.data.profile.owned_cosmetics or getattr(item, "price", 0) == 0
+        if owned:
+            return "owned"
+        if getattr(item, "premium_only", False) and not self.is_premium(today):
+            return "premium"
+        return "buy"
 
     def sync_ad_flags(self) -> None:
         """13-17 band -> non-personalized ads flag (sent to AdMob in Part 2)."""

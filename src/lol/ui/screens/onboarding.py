@@ -171,6 +171,9 @@ class Onboarding(ft.Container):
         self._orb.scale = 1
         self._sub.opacity = 1
         self._begin.opacity, self._begin.disabled = 1, False
+        if hasattr(self, "_google_btn") and self._google_btn is not None:
+            self._google_btn.opacity, self._google_btn.disabled = 1, False
+            ui.refresh(self._google_btn)
         ui.refresh(self._orb, self._sub, self._begin)
 
     async def _move(self, delta: int) -> None:
@@ -360,34 +363,67 @@ class Onboarding(ft.Container):
                                             expand=False)
         self._begin.opacity, self._begin.disabled = 0, True
         self._begin.animate_opacity = Motion.anim(Motion.FADE_MS + 100)
+        self._google_btn: ft.Container | None = None
         cta: list[ft.Control] = [self._begin]
         if not self.redo:
-            cta.append(ft.Text("Saved on this device as a guest. Cloud backup comes later.",
+            async def google_sign_in(_: Any = None) -> None:
+                await ui.buzz("light")
+                self.app.cloud.mark_first_open_prompted()
+                await self.app.cloud.start_login()
+
+            self._google_btn = common.secondary_button(
+                "Sign in with Google",
+                google_sign_in,
+                icon=ft.Icons.LOGIN,
+                expand=False,
+            )
+            self._google_btn.opacity, self._google_btn.disabled = 0, True
+            self._google_btn.animate_opacity = Motion.anim(Motion.FADE_MS + 100)
+            cta.append(self._google_btn)
+            cta.append(ft.Text("Sign in with Google to restore or back up your cloud save.",
                                size=Type.CAPTION, color=C.TEXT_DIM,
                                text_align=ft.TextAlign.CENTER))
+            # Terms of Service & Privacy agreement
+            def open_tos(_: Any = None) -> None:
+                self.app.page.launch_url("https://github.com/JeebsZ/Life-Of-Legends/blob/main/TERMS_OF_SERVICE.md")
+
+            def open_privacy(_: Any = None) -> None:
+                self.app.page.launch_url("https://github.com/JeebsZ/Life-Of-Legends/blob/main/PRIVACY_POLICY.md")
+
+            legal_row = ft.Row([
+                ft.Text("By continuing, you agree to the", size=11, color=C.TEXT_DIM),
+                ft.TextButton("Terms of Service", on_click=open_tos,
+                              style=ft.ButtonStyle(padding=0, color=C.PRIMARY)),
+                ft.Text("&", size=11, color=C.TEXT_DIM),
+                ft.TextButton("Privacy Policy", on_click=open_privacy,
+                              style=ft.ButtonStyle(padding=0, color=C.PRIMARY)),
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=3, wrap=True)
+            cta.append(legal_row)
         if self.step == 0 and self._typed.value == "" and getattr(self, "_greeted", False):
             self._orb.opacity, self._orb.scale = 1, 1  # came back with Back: no replay
             self._typed.value = "Ready when you are."
             self._sub.opacity, self._begin.opacity, self._begin.disabled = 1, 1, False
+            if self._google_btn is not None:
+                self._google_btn.opacity, self._google_btn.disabled = 1, False
         self._greeted = True
         return stage, cta
 
-    # ------------------------------------------------------------------ 2 name + sigil
+    # ------------------------------------------------------------------ 2 name
     def _step_name(self) -> tuple[ft.Control, list[ft.Control]]:
-        av = avatars.get(self.avatar_id)
-        self._plate_bubble = avatars.bubble(self.avatar_id, 72, custom=self.avatar_custom)
+        theme_col = th.current().primary
+        self._plate_bubble = avatars.bubble(self.avatar_id, 108, custom=self.avatar_custom)
         self._plate_name = ft.Text(self.name or DEFAULT_NAME, size=Type.DISPLAY,
                                    weight=ft.FontWeight.W_900, color=C.TEXT, max_lines=1,
                                    overflow=ft.TextOverflow.ELLIPSIS,
                                    text_align=ft.TextAlign.CENTER)
-        self._plate_sigil = ft.Text(f"{av.name} sigil · Level 1", size=Type.LABEL,
+        self._plate_sigil = ft.Text("Level 1 Hero", size=Type.LABEL,
                                     color=C.TEXT_DIM)
         self._plate = ambient.glass(ft.Column([
             ft.Text(th.label("Hero"), size=Type.CAPTION, weight=ft.FontWeight.BOLD,
-                    color=av.color, style=ft.TextStyle(letter_spacing=3)),
+                    color=theme_col, style=ft.TextStyle(letter_spacing=3)),
             self._plate_bubble, self._plate_name, self._plate_sigil,
         ], spacing=Space.SM, tight=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            radius=Radius.LG, padding=Space.LG, tint=av.color, scale=1,
+            radius=Radius.LG, padding=Space.LG, tint=theme_col, scale=1,
             animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK))
 
         def typed(e: Any) -> None:
@@ -402,23 +438,11 @@ class Onboarding(ft.Container):
         self._name_field.capitalization = ft.TextCapitalization.WORDS
         self._name_field.on_change = typed
 
-        def picked(aid: str) -> None:
-            self.avatar_id = aid
-            a = avatars.get(aid)
-            avatars.restyle_bubble(self._plate_bubble, aid, custom=self.avatar_custom)
-            self._plate_sigil.value = f"{a.name} sigil · Level 1"
-            ambient.set_glass_tint(self._plate, a.color)
-            ui.refresh(self._plate)
-            self.app.page.run_task(ui.pop, self._plate, 1.04)
-            self.app.page.run_task(self.app.fx_burst.burst, None, None, color=a.color,
-                                   count=16, ring=False)
-
         stage = ft.Column([
             *self._title("What shall I call you?",
                          "A name, a nickname or a title. You can change it later."),
             self._plate,
             self._name_field,
-            avatars.AvatarPicker(self.avatar_id, size=42, on_change=picked),
         ], spacing=Space.MD, horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             scroll=ft.ScrollMode.AUTO)
         return stage, self._footer(True)

@@ -20,8 +20,8 @@ org = "com.companions"
 product = "LUMA: Your Lifestyle QoL"
 company = "Companions"
 bundle_id = "com.companions.LUMA"
-build_number = 6
-build_version = "0.1.3"
+build_number = 18
+build_version = "0.2.1"
 
 [tool.flet.app]
 path = "src"
@@ -72,7 +72,7 @@ flet-lumen-ocr = "extensions/flet_lumen_ocr"
 "android.permission.POST_NOTIFICATIONS" = true
 "android.permission.RECEIVE_BOOT_COMPLETED" = true
 "android.permission.VIBRATE" = true
-# CAMERA: meal photo scan (flet-camera); denied -> the app falls back to the gallery.
+# CAMERA: meal photo scan & receipt OCR (flet-camera); denied -> the app falls back to the system photo picker.
 "android.permission.CAMERA" = true
 # Location: walk/run tracker (foreground & background / screen-off tracking).
 "android.permission.ACCESS_FINE_LOCATION" = true
@@ -81,6 +81,8 @@ flet-lumen-ocr = "extensions/flet_lumen_ocr"
 "android.permission.FOREGROUND_SERVICE" = true
 "android.permission.FOREGROUND_SERVICE_LOCATION" = true
 "android.permission.WAKE_LOCK" = true
+# Google AdMob Advertising ID (required for Android 13+ devices to serve targeted/rewarded ads)
+"com.google.android.gms.permission.AD_ID" = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

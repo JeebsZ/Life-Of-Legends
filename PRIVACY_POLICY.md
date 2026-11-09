@@ -12,7 +12,7 @@ LUMA is designed as an **offline-first lifestyle companion**. Your habits, quest
 
 ### 1. Information the App Accesses and Collects
 * **Location Data (GPS):** The App accesses precise and approximate location data exclusively while you track an active outdoor walk or run session. This enables route mapping, pace calculations, split distance metrics, and the Adventure Run combat feature. Location tracking also operates in the background / screen-off via a visible foreground service notification during active tracking. Your location coordinates are stored strictly on your device and are never shared or uploaded.
-* **Camera & Photos:** If you use the meal logging or study card scan features, the App requests camera access to capture images. Photos are processed on-device (via local vision/OCR models) and stored in your private local app directory.
+* **Camera, Photos & Receipts:** If you use the meal logging, study card scan, or receipt scanning features, the App requests camera access to capture images. Photos and receipts are processed 100% on-device (via local vision and ML Kit OCR models) and stored exclusively in your device's private local app storage sandbox. Receipts, financial amounts, and payment QR codes are never transmitted to external servers.
 * **Health & Fitness Metrics:** User-entered activity logs, workout minutes, water consumption, sleep check-ins, and optional body weight entries are stored locally to calculate progress and provide lifestyle analytics.
 * **App State & Settings:** Quest completions, sound preferences, themes, language selections, and in-game gold coin tallies are saved in your local save file.
 
