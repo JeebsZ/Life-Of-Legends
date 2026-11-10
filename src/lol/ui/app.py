@@ -816,12 +816,60 @@ def main(page: ft.Page) -> None:
             return
         _after_google_prompt()
 
+    def handle_quick_record_route(route: str | None) -> None:
+        if not route or "quick" not in route:
+            return
+        today = app.today()
+        is_prem = app.game.is_premium(today)
+        action = ""
+        if "action=water" in route:
+            action = "water"
+        elif "action=workout" in route:
+            action = "workout"
+        elif "action=journal" in route:
+            action = "journal"
+        elif "action=run" in route:
+            action = "run"
+        elif "action=grove" in route or "action=farm" in route:
+            action = "grove"
+
+        if not action:
+            return
+
+        if not is_prem:
+            app.open_sub("premium")
+            app.toast(
+                "Home Screen Quick Record Widget is a Legends+ feature!",
+                ft.Icons.WORKSPACE_PREMIUM,
+            )
+            return
+
+        if action == "water":
+            app.game.add_water(250, today)
+            app.save()
+            sfx.play("coin")
+            app.toast("💧 +250 mL logged via Quick Widget!", ft.Icons.WATER_DROP)
+            app.rerender()
+        elif action == "workout":
+            app.open_sub("workout")
+        elif action == "journal":
+            from lol.ui.screens import journal
+
+            journal.open_journal_sheet(app)
+        elif action == "run":
+            app.open_sub("run")
+        elif action == "grove":
+            app.open_sub("grove")
+
+    page.on_route_change = lambda e: handle_quick_record_route(getattr(e, "route", ""))
+
     if app.game.profile.onboarded:
         mount_shell(app)
         sfx.play("download_complete", 0.7)  # app opened; Luma's welcome back follows it
         app.greet_on_open()
         app.resync_reminders(2.0)
         page.run_task(_startup_prompts, True)
+        handle_quick_record_route(getattr(page, "route", ""))
         return
 
     run_onboarding(app)

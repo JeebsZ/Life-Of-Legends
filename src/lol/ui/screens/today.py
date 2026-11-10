@@ -49,8 +49,6 @@ class TodayScreen:
 
             items.append(energy_screen.chip_row(self.app, self._rerender, self._skip_energy))
 
-        items.append(self._quick_records_hub())
-
         self._header_at = len(items)
         items.append(self._header(len(open_)))
         if not quests:
@@ -78,105 +76,6 @@ class TodayScreen:
             items.append(ui.SectionHeader("Done today", count=len(done)))
             items += [self._card(q) for q in done]
         self.list.controls = items
-
-    def _quick_records_hub(self) -> ft.Control:
-        g, today = self.app.game, self.app.today()
-
-        def quick_water(amount_ml: int):
-            def do_water(_):
-                g.add_water(amount_ml, today)
-                self.app.save()
-                sfx.play("coin")
-                self.app.toast(f"💧 +{amount_ml} mL water logged!", ft.Icons.WATER_DROP)
-                self.render()
-                ui.refresh(self.list)
-            return do_water
-
-        def open_journal(_):
-            from lol.ui.screens import journal
-            journal.open_journal_sheet(self.app, self._rerender)
-
-        def open_workout(_):
-            self.app.open_sub("workout")
-
-        def open_run(_):
-            self.app.open_sub("run")
-
-        def open_grove(_):
-            self.app.open_sub("grove")
-
-        actions = [
-            ("Workout", ft.Icons.FITNESS_CENTER_ROUNDED, "#FF6F91", open_workout),
-            ("+250ml", ft.Icons.WATER_DROP_ROUNDED, "#5EC8F2", quick_water(250)),
-            ("Journal", ft.Icons.AUTO_STORIES_ROUNDED, "#C77DFF", open_journal),
-            ("Run/Walk", ft.Icons.DIRECTIONS_RUN_ROUNDED, "#FF8A5B", open_run),
-            ("Farm", ft.Icons.PARK_ROUNDED, "#06D6A0", open_grove),
-        ]
-
-        action_chips: list[ft.Control] = []
-        for label, icon, color, handler in actions:
-            action_chips.append(
-                ft.Container(
-                    ft.Column(
-                        [
-                            ft.Container(
-                                ft.Icon(icon, size=20, color=color),
-                                width=42,
-                                height=42,
-                                border_radius=Radius.MD,
-                                bgcolor=C.a(color, 0.15),
-                                alignment=ft.Alignment(0, 0),
-                            ),
-                            ft.Text(
-                                label,
-                                size=Type.CAPTION - 1,
-                                weight=ft.FontWeight.W_600,
-                                color=C.TEXT,
-                                no_wrap=True,
-                            ),
-                        ],
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=4,
-                    ),
-                    padding=ft.Padding.symmetric(horizontal=8, vertical=6),
-                    border_radius=Radius.MD,
-                    bgcolor=C.a(C.SURFACE, 0.4),
-                    on_click=handler,
-                )
-            )
-
-        return common.card(
-            ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Row(
-                                [
-                                    ft.Icon(ft.Icons.FLASH_ON_ROUNDED, color=C.GOLD, size=16),
-                                    ft.Text(
-                                        "QUICK RECORD",
-                                        size=Type.CAPTION - 1,
-                                        weight=ft.FontWeight.BOLD,
-                                        color=C.GOLD,
-                                    ),
-                                ],
-                                spacing=Space.XS,
-                            ),
-                            ft.Text("1-tap logging", size=Type.CAPTION - 2, color=C.TEXT_DIM),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                    ft.Row(
-                        action_chips,
-                        alignment=ft.MainAxisAlignment.SPACE_AROUND,
-                        spacing=Space.XS,
-                    ),
-                ],
-                spacing=Space.SM,
-            ),
-            tint=C.GOLD,
-            padding=Space.MD,
-        )
 
     def _header(self, open_count: int) -> ui.SectionHeader:
         return ui.SectionHeader("Today's quests", count=open_count, action_text="Add",

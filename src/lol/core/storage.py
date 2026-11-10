@@ -346,17 +346,21 @@ def _split_bill(raw: dict[str, Any]) -> SplitBill:
 def _grove(raw: dict[str, Any] | None) -> Any:
     if not isinstance(raw, dict):
         return None
-    from lol.core.grove import CropPlot, GroveState
+    from lol.core.grove import CropPlot, GroveState, ensure_grove_plots
 
     plots = [_build(CropPlot, p) for p in raw.get("plots", []) if isinstance(p, dict)]
-    return GroveState(
+    state = GroveState(
         plots=plots if plots else [CropPlot(plot_id=i) for i in range(6)],
         seeds={str(k): int(v) for k, v in (raw.get("seeds") or {}).items()},
         harvested={str(k): int(v) for k, v in (raw.get("harvested") or {}).items()},
         total_harvests=int(raw.get("total_harvests", 0)),
         discovered_fusions=[str(x) for x in raw.get("discovered_fusions", [])],
         last_awarded_habits={str(k): str(v) for k, v in (raw.get("last_awarded_habits") or {}).items()},
+        luma_level=int(raw.get("luma_level", 1) or 1),
+        luma_xp=int(raw.get("luma_xp", 0) or 0),
     )
+    ensure_grove_plots(state)
+    return state
 
 
 def _min_next_id(data: SaveData) -> int:

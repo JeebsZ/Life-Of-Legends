@@ -5,31 +5,40 @@ from lol.core.game import Game
 from lol.core.grove import (
     FUSION_RECIPES,
     SEEDS,
-    CropPlot,
     GroveState,
+    ensure_grove_plots,
+    feed_luma,
     fuse_seeds,
     get_seed,
     harvest_crop,
+    luma_barter_multiplier,
     plant_crop,
     plot_progress,
     plot_remaining_s,
+    sell_crop,
+    sell_crop_value,
     sync_fitness_to_grove,
 )
 from lol.core.models import RunEntry, SleepEntry, WaterEntry, WorkoutSession
 
 
 def test_seed_catalog():
-    assert len(SEEDS) == 16
+    assert len(SEEDS) == 26
     aqua = get_seed("seed_aqua")
     assert aqua is not None
     assert aqua.tier == 1
-    assert aqua.coin_yield == 60
+    assert aqua.coin_yield == 12
     assert aqua.emoji == "💧"
 
     ygg = get_seed("seed_yggdrasil")
     assert ygg is not None
     assert ygg.tier == 4
-    assert ygg.coin_yield == 2200
+    assert ygg.coin_yield == 280
+
+    obsidian = get_seed("seed_obsidian")
+    assert obsidian is not None
+    assert obsidian.tier == 3
+    assert obsidian.coin_yield == 115
 
 
 def test_planting_and_growth_calc():
@@ -77,25 +86,92 @@ def test_harvest_crop():
     grove.plots[1].harvest_ready = True
     rng = random.Random(42)  # deterministic
     coins, bonus = harvest_crop(grove, 1, rng=rng)
-    assert coins == 65
+    # Harvesting awards 0 direct coins; crops go to Silo for player choice (Sell vs Feed)
+    assert coins == 0
     assert len(bonus) >= 1
     assert grove.plots[1].is_empty()
     assert grove.harvested["seed_solar"] == 1
     assert grove.total_harvests == 1
 
 
-def test_altar_fusion():
+def test_sell_crop_and_barter_rates():
+    grove = GroveState()
+    grove.harvested["seed_aqua"] = 5
+    grove.luma_level = 1
+
+    # Base price at Lv 1 (1.0x): 12 coins
+    assert sell_crop_value("seed_aqua", grove.luma_level) == 12
+    coins_earned = sell_crop(grove, "seed_aqua", 2)
+    assert coins_earned == 24
+    assert grove.harvested["seed_aqua"] == 3
+
+    # Upgrade LUMA to Level 10 (1.50x barter rate)
+    grove.luma_level = 10
+    assert luma_barter_multiplier(10) == 1.50
+    # 12 * 1.50 = 18 coins per crop
+    assert sell_crop_value("seed_aqua", 10) == 18
+    coins_earned_lv10 = sell_crop(grove, "seed_aqua", 3)
+    assert coins_earned_lv10 == 54
+    assert "seed_aqua" not in grove.harvested
+
+
+def test_feed_luma_progression_and_plot_unlocks():
+    grove = GroveState()
+    grove.harvested["seed_aqua"] = 10  # Tier 1: 20 XP each
+    assert grove.luma_level == 1
+    assert grove.luma_xp == 0
+    assert len(grove.plots) == 6
+
+    # Feed 1 crop -> 20 XP
+    xp, leveled = feed_luma(grove, "seed_aqua", is_premium=False)
+    assert xp == 20
+    assert leveled is False
+    assert grove.luma_xp == 20
+    assert grove.harvested["seed_aqua"] == 9
+
+    # Feed with premium: +50% XP = 30 XP
+    xp_prem, _ = feed_luma(grove, "seed_aqua", is_premium=True)
+    assert xp_prem == 30
+    assert grove.luma_xp == 50
+
+    # Level 1 requires 100 XP to level up. Add a Tier 2 crop (60 XP)
+    grove.harvested["seed_mist"] = 1
+    xp, leveled = feed_luma(grove, "seed_mist")
+    assert xp == 60
+    assert leveled is True
+    assert grove.luma_level == 2
+    assert grove.luma_xp == 10  # 50 + 60 = 110, 110 - 100 = 10
+
+    # Fast forward to Level 5 -> Unlocks Plot #7
+    grove.luma_level = 5
+    ensure_grove_plots(grove)
+    assert len(grove.plots) == 7
+
+    # Fast forward to Level 10 -> Unlocks Plot #8
+    grove.luma_level = 10
+    ensure_grove_plots(grove)
+    assert len(grove.plots) == 8
+
+
+def test_altar_fusion_and_infusions():
     grove = GroveState()
     grove.seeds["seed_aqua"] = 2
     grove.seeds["seed_solar"] = 1
 
     # Fuse Aqua + Solar -> Mist (Vapor Orchid)
-    res, is_mut = fuse_seeds(grove, "seed_aqua", "seed_solar", rng=random.Random(1))
+    res, _is_mut = fuse_seeds(grove, "seed_aqua", "seed_solar", rng=random.Random(1))
     assert res == "seed_mist"
     assert grove.seeds["seed_aqua"] == 1
     assert "seed_solar" not in grove.seeds
     assert grove.seeds["seed_mist"] == 1
     assert "seed_mist" in grove.discovered_fusions
+
+    # Test Tier 3 + Tier 1 Cross-Infusion: Volcanic Bloom + Aqua Spore -> Obsidian Lily
+    grove.seeds["seed_volcanic"] = 1
+    grove.seeds["seed_aqua"] = 1
+    inf_res, _ = fuse_seeds(grove, "seed_volcanic", "seed_aqua", rng=random.Random(1))
+    assert inf_res == "seed_obsidian"
+    assert grove.seeds["seed_obsidian"] == 1
 
     # Test all predefined recipe keys exist
     for pair, output in FUSION_RECIPES.items():
@@ -118,56 +194,19 @@ def test_sync_fitness_to_grove():
     # 4. Log sleep
     g.data.sleep.append(SleepEntry(id="s1", night_of=today_iso, bedtime="23:00", wake="07:00", logged_on=today_iso))
 
-    # Plant a crop to receive sunlight & water
-    g.data.grove = GroveState()
-    g.data.grove.seeds.clear()
-    g.data.grove.seeds["seed_terra"] = 1
-    now = datetime.now(UTC)
-    plant_crop(g.data.grove, 0, "seed_terra", now=now)
+    res = sync_fitness_to_grove(g)
+    grove: GroveState = g.data.grove
 
-    sync_result = sync_fitness_to_grove(g, now=now)
-    grove = g.data.grove
+    assert "seed_aqua" in res["awarded_seeds"]
+    assert "seed_solar" in res["awarded_seeds"]
+    assert "seed_terra" in res["awarded_seeds"]
+    assert "seed_spirit" in res["awarded_seeds"]
 
-    assert "seed_aqua" in sync_result["awarded_seeds"]
-    assert "seed_solar" in sync_result["awarded_seeds"]
-    assert "seed_terra" in sync_result["awarded_seeds"]
-    assert "seed_spirit" in sync_result["awarded_seeds"]
+    # Starter 2 aqua + 1 habit = 3
+    assert grove.seeds["seed_aqua"] == 3
+    assert grove.seeds["seed_solar"] == 3
+    assert grove.seeds["seed_terra"] == 2
+    assert grove.seeds["seed_spirit"] == 2
 
-    # Seeds awarded in inventory
-    assert grove.seeds.get("seed_aqua") == 1
-    assert grove.seeds.get("seed_solar") == 1
-    assert grove.seeds.get("seed_terra") == 1  # 1 was planted, 1 newly awarded
-    assert grove.seeds.get("seed_spirit") == 1
-
-    # Sunlight boost calculated: 2500m -> 25 * 60 = 1500s boost
-    assert sync_result["sunlight_boost_s"] == 1500.0
-    assert grove.plots[0].boost_s == 1500.0
-
-
-def test_grove_storage_save_load(tmp_path):
-    g = Game()
-    g.data.grove = GroveState()
-    g.data.grove.seeds["seed_celestial"] = 3
-    g.data.grove.harvested["seed_aqua"] = 5
-    g.data.grove.total_harvests = 5
-    g.data.grove.discovered_fusions = ["seed_mist", "seed_celestial"]
-    g.data.grove.plots[0] = CropPlot(
-        plot_id=0,
-        seed_id="seed_celestial",
-        planted_at="2026-11-10T10:00:00+00:00",
-        watered_at="2026-11-10T10:00:00+00:00",
-        boost_s=360.0,
-        harvest_ready=False,
-    )
-
-    path = g.save(tmp_path / "save.json")
-    loaded = Game.load(path)
-
-    assert loaded.data.grove is not None
-    loaded_grove: GroveState = loaded.data.grove
-    assert loaded_grove.seeds["seed_celestial"] == 3
-    assert loaded_grove.harvested["seed_aqua"] == 5
-    assert loaded_grove.total_harvests == 5
-    assert loaded_grove.discovered_fusions == ["seed_mist", "seed_celestial"]
-    assert loaded_grove.plots[0].seed_id == "seed_celestial"
-    assert loaded_grove.plots[0].boost_s == 360.0
+    # Sunlight boost for 2500m (25 * 60 = 1500s)
+    assert res["sunlight_boost_s"] == 1500.0

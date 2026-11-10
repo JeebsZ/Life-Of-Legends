@@ -43,6 +43,8 @@ def benefits() -> list[tuple[ft.IconData, str, str]]:
         (ft.Icons.QUERY_STATS, "Insights for all time", "Free shows the last 7 days."),
         (ft.Icons.PALETTE, "Premium themes and cosmetics",
          "Unlocks the right to buy them with the coins you earn. Coins are never sold."),
+        (ft.Icons.WIDGETS_ROUNDED, "Home Screen Quick Record Widget",
+         "1-tap log water, workouts, journal, and runs directly from your Android home screen."),
     ]
 
 

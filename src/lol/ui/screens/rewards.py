@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 COSMETIC_CAT_ICONS: dict[str, ft.IconData] = {
     "particles": ft.Icons.AUTO_AWESOME,
     "frame": ft.Icons.RADIO_BUTTON_CHECKED,
-    "title": ft.Icons.MILITARY_TECH,
     "pet": ft.Icons.PETS,
     "fx_style": ft.Icons.BOLT,
 }
@@ -139,16 +138,15 @@ class RewardsScreen:
             items.append(ui.SectionHeader("Archived", count=len(archived)))
             items += [self._archived_row(r) for r in archived]
 
-        # --- Personalization Shop (Themes, Background FX, Frames, Titles, Pets, XP & Trail FX) ---
+        # --- Personalization Shop (Themes, Background FX, Frames, Pets, XP & Trail FX) ---
         items.append(ui.SectionHeader("Personalization Shop"))
         items.append(
             common.hint(
-                "Customize themes, background particles, avatar frames, hero titles, "
-                "companions, and XP/GPS trail glow."
+                "Customize themes, background particles, avatar frames, companions, and XP/GPS trail glow."
             )
         )
         cat_chips: list[ft.Control] = []
-        shop_cats = {"theme": "Themes", **cos.CATEGORIES}
+        shop_cats = {k: v for k, v in {"theme": "Themes", **cos.CATEGORIES}.items() if k != "title"}
         for cat_id, cat_label in shop_cats.items():
             active_cat = cat_id == self.selected_cat
             cat_chips.append(
@@ -182,6 +180,48 @@ class RewardsScreen:
             )
         items.append(ft.Row(cat_chips, spacing=Space.XS, wrap=True, run_spacing=Space.XS))
 
+        # Direct link card for Hero Titles (Achievements)
+        items.append(
+            common.card(
+                ft.Row(
+                    [
+                        ft.Icon(ft.Icons.MILITARY_TECH, color=C.GOLD, size=24),
+                        ft.Column(
+                            [
+                                ft.Text(
+                                    "Hero Titles are Earned, Not Bought",
+                                    size=Type.CAPTION,
+                                    weight=ft.FontWeight.BOLD,
+                                    color=C.TEXT,
+                                ),
+                                ft.Text(
+                                    "Titles are awarded exclusively by completing in-game Achievements. Equip up to 3 simultaneously!",
+                                    size=Type.CAPTION - 2,
+                                    color=C.TEXT_DIM,
+                                ),
+                            ],
+                            spacing=1,
+                            expand=True,
+                        ),
+                        ft.FilledButton(
+                            "View Titles",
+                            icon=ft.Icons.ARROW_FORWARD,
+                            style=ft.ButtonStyle(
+                                bgcolor=C.a(C.GOLD, 0.2),
+                                color=C.GOLD,
+                                shape=ft.RoundedRectangleBorder(radius=Radius.PILL),
+                            ),
+                            on_click=lambda _: self.app.open_sub("achievements"),
+                        ),
+                    ],
+                    spacing=Space.SM,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                padding=Space.SM,
+                tint=C.GOLD,
+            )
+        )
+
         if self.selected_cat == "theme":
             items.append(common.hint("Change how the whole app looks. Bought once, yours forever. "
                                      f"Crowned themes need {PREMIUM_NAME} to buy with coins."))
@@ -211,14 +251,9 @@ class RewardsScreen:
             cos_grid: list[ft.Control] = []
             self.cosmetic_tiles = {}
             equipped_id = g.equipped_cosmetic_id(self.selected_cat)
-            is_title_cat = self.selected_cat == "title"
             for c_item in cos.items_for_category(self.selected_cat):
-                if is_title_cat:
-                    owned_c = cos.is_title_unlocked(g, c_item.id)
-                    active_c = g.is_title_equipped(c_item.id)
-                else:
-                    owned_c = c_item.id in g.profile.owned_cosmetics or c_item.price == 0
-                    active_c = c_item.id == equipped_id
+                owned_c = c_item.id in g.profile.owned_cosmetics or c_item.price == 0
+                active_c = c_item.id == equipped_id
                 sw = [
                     c_item.color,
                     c_item.secondary_color or c_item.color,
@@ -229,16 +264,7 @@ class RewardsScreen:
                     if c_item.category == "pet" and c_item.badge_text
                     else c_item.name
                 )
-                if is_title_cat:
-                    eq_cnt = len(getattr(g.profile, "equipped_titles", []))
-                    if not owned_c:
-                        item_note = f"🔒 {c_item.subtitle}"
-                    elif active_c:
-                        item_note = f"✓ Equipped ({eq_cnt}/3 active)"
-                    else:
-                        item_note = "Unlocked · Tap to equip (up to 3)"
-                else:
-                    item_note = c_item.subtitle
+                item_note = c_item.subtitle
 
                 c_tile = ui.RewardTile(
                     label_title,
@@ -305,15 +331,10 @@ class RewardsScreen:
         for tid, tile in self.theme_tiles.items():
             tile.set_owned(tid in p.owned_themes, tid == p.theme_id)
         eq_id = self.app.game.equipped_cosmetic_id(self.selected_cat)
-        is_title_cat = self.selected_cat == "title"
         for cid, tile in self.cosmetic_tiles.items():
             item = cos.COSMETIC_BY_ID.get(cid)
-            if is_title_cat:
-                owned = cos.is_title_unlocked(self.app.game, cid)
-                active = self.app.game.is_title_equipped(cid)
-            else:
-                owned = cid in p.owned_cosmetics or (item is not None and item.price == 0)
-                active = cid == eq_id
+            owned = cid in p.owned_cosmetics or (item is not None and item.price == 0)
+            active = cid == eq_id
             tile.set_owned(owned, active)
 
     def _select_cat(self, cat_id: str) -> None:
@@ -394,23 +415,14 @@ class RewardsScreen:
 
     def _use_cosmetic(self, item_id: str) -> None:
         item = cos.COSMETIC_BY_ID.get(item_id)
-        was_equipped = self.app.game.is_title_equipped(item_id) if (item and item.category == "title") else False
         if not self.app.game.equip_cosmetic(item_id):
-            if item and item.category == "title":
-                self.app.toast(f"Locked: {item.subtitle}", ft.Icons.LOCK)
             return
         self.app.save()
         sfx.play("tap")
         self.app.refresh_profile()
         self.restyle()
         if item is not None:
-            if item.category == "title":
-                if was_equipped:
-                    self.app.toast(f"Unequipped title '{item.name}'", ft.Icons.REMOVE_CIRCLE_OUTLINE)
-                else:
-                    self.app.toast(f"Equipped title '{item.name}'", ft.Icons.CHECK_CIRCLE)
-            else:
-                self.app.toast(f"Equipped {item.name}", ft.Icons.CHECK_CIRCLE_OUTLINE)
+            self.app.toast(f"Equipped {item.name}", ft.Icons.CHECK_CIRCLE_OUTLINE)
 
     async def _delete(self, reward_id: str) -> None:
         await ui.buzz("medium")

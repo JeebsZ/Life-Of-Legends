@@ -84,6 +84,11 @@ COMBOS: dict[str, tuple[tuple[str, float, float], ...]] = {
                       ("holo_flicker", 0.12, 0.6)),
     # Path level-up banner: level_up with rank_up under it
     "path_level_up": (("level_up", 0.0, 1.0), ("rank_up", 0.0, 0.5)),
+    # Botanical Altar seed transmutation: charging energy, elemental resonance, and radiant reveal
+    "botanical_transmute": (("power_up", 0.0, 0.8), ("lumen_hum", 0.15, 0.7),
+                            ("upgrade", 0.65, 0.9), ("unlock", 0.9, 0.85)),
+    # Botanical crop harvest: coin chime, quest clear stinger, and access granted sparkle
+    "harvest_burst": (("coin", 0.0, 1.0), ("quest_clear", 0.08, 0.8), ("granted", 0.2, 0.7)),
 }
 # Own players (no src swaps): every file of these. Keep short: each Audio is a native player.
 DEDICATED: tuple[str, ...] = ("tap", "type", "toggle_on", "quest_clear", "quest_done")

@@ -33,18 +33,18 @@ class SeedDef:
 
 # --- Catalog of all 16 Flora Seeds ---
 SEEDS: dict[str, SeedDef] = {
-    # Tier 1: Base Spores (Earned exclusively via daily health habits)
     "seed_aqua": SeedDef(
         "seed_aqua",
         "Aqua Spore",
         1,
         "Common",
         "A bioluminescent water spore earned by staying hydrated.",
-        growth_time_s=1800,  # 30 mins base (or ~5 mins with a walk)
-        coin_yield=60,
-        color="#00F5D4",
+        growth_time_s=1800,
+        coin_yield=12,
+        color="`#00F5D4`",
         icon_name="water_drop",
         emoji="💧",
+        mutation_chance=0.08,
     ),
     "seed_solar": SeedDef(
         "seed_solar",
@@ -53,10 +53,11 @@ SEEDS: dict[str, SeedDef] = {
         "Common",
         "A radiant ember seed energized by outdoor walks and runs.",
         growth_time_s=1800,
-        coin_yield=65,
-        color="#FFD166",
+        coin_yield=14,
+        color="`#FFD166`",
         icon_name="wb_sunny",
         emoji="☀️",
+        mutation_chance=0.08,
     ),
     "seed_terra": SeedDef(
         "seed_terra",
@@ -65,10 +66,11 @@ SEEDS: dict[str, SeedDef] = {
         "Common",
         "An iron-dense earthen bulb strengthened by gym and workout sessions.",
         growth_time_s=2400,
-        coin_yield=75,
-        color="#06D6A0",
+        coin_yield=15,
+        color="`#06D6A0`",
         icon_name="fitness_center",
         emoji="🪨",
+        mutation_chance=0.08,
     ),
     "seed_spirit": SeedDef(
         "seed_spirit",
@@ -77,23 +79,24 @@ SEEDS: dict[str, SeedDef] = {
         "Common",
         "A tranquil twilight seed nurtured by mindful sleep and focus sessions.",
         growth_time_s=2400,
-        coin_yield=75,
-        color="#C77DFF",
+        coin_yield=15,
+        color="`#C77DFF`",
         icon_name="self_improvement",
         emoji="🌙",
+        mutation_chance=0.08,
     ),
-    # Tier 2: Elemental Hybrids (Synthesized at the Altar from 2 Tier 1 seeds)
     "seed_mist": SeedDef(
         "seed_mist",
         "Vapor Orchid",
         2,
         "Uncommon",
         "A delicate blossom that shimmers with warm morning mist. (Aqua + Solar)",
-        growth_time_s=3600,  # 1 hour
-        coin_yield=180,
-        color="#FF99C8",
+        growth_time_s=3600,
+        coin_yield=35,
+        color="`#FF99C8`",
         icon_name="local_florist",
         emoji="🌸",
+        mutation_chance=0.08,
     ),
     "seed_deep": SeedDef(
         "seed_deep",
@@ -102,10 +105,11 @@ SEEDS: dict[str, SeedDef] = {
         "Uncommon",
         "A glowing abyssal root rich in ocean minerals. (Aqua + Terra)",
         growth_time_s=4200,
-        coin_yield=200,
-        color="#48CAE4",
+        coin_yield=40,
+        color="`#48CAE4`",
         icon_name="waves",
         emoji="🌿",
+        mutation_chance=0.08,
     ),
     "seed_magma": SeedDef(
         "seed_magma",
@@ -114,10 +118,11 @@ SEEDS: dict[str, SeedDef] = {
         "Uncommon",
         "A warm volcanic pepper pulsing with kinetic heat. (Solar + Terra)",
         growth_time_s=4200,
-        coin_yield=220,
-        color="#FF6B35",
+        coin_yield=40,
+        color="`#FF6B35`",
         icon_name="whatshot",
         emoji="🌶️",
+        mutation_chance=0.08,
     ),
     "seed_dawn": SeedDef(
         "seed_dawn",
@@ -126,10 +131,11 @@ SEEDS: dict[str, SeedDef] = {
         "Uncommon",
         "A celestial flower that blooms with changing sunrise hues. (Solar + Spirit)",
         growth_time_s=4800,
-        coin_yield=240,
-        color="#FFB4D6",
+        coin_yield=45,
+        color="`#FFB4D6`",
         icon_name="flare",
         emoji="🌻",
+        mutation_chance=0.08,
     ),
     "seed_frost": SeedDef(
         "seed_frost",
@@ -138,10 +144,11 @@ SEEDS: dict[str, SeedDef] = {
         "Uncommon",
         "A crystalline flower that radiates a soothing winter chill. (Aqua + Spirit)",
         growth_time_s=4800,
-        coin_yield=250,
-        color="#A0C4FF",
+        coin_yield=45,
+        color="`#A0C4FF`",
         icon_name="ac_unit",
         emoji="❄️",
+        mutation_chance=0.08,
     ),
     "seed_iron": SeedDef(
         "seed_iron",
@@ -150,21 +157,47 @@ SEEDS: dict[str, SeedDef] = {
         "Uncommon",
         "A sturdy metallic acorn forged with earthen resilience. (Terra + Spirit)",
         growth_time_s=5400,
-        coin_yield=270,
-        color="#BDB2FF",
+        coin_yield=50,
+        color="`#BDB2FF`",
         icon_name="shield",
         emoji="🌰",
+        mutation_chance=0.08,
     ),
-    # Tier 3: Mystical Flora (Synthesized from Tier 2 Hybrids)
+    "seed_abyssal": SeedDef(
+        "seed_abyssal",
+        "Abyssal Kelp",
+        2,
+        "Uncommon",
+        "Luminescent deep-sea kelp shimmering with oceanic tranquility. (Deep + Frost)",
+        growth_time_s=5100,
+        coin_yield=48,
+        color="`#0077B6`",
+        icon_name="water",
+        emoji="🌊",
+        mutation_chance=0.08,
+    ),
+    "seed_solar_flare": SeedDef(
+        "seed_solar_flare",
+        "Flare Peony",
+        2,
+        "Uncommon",
+        "A radiant blossom bathed in intense morning dawn warmth. (Magma + Dawn)",
+        growth_time_s=5100,
+        coin_yield=48,
+        color="`#FF5400`",
+        icon_name="wb_iridescent",
+        emoji="🌺",
+        mutation_chance=0.08,
+    ),
     "seed_volcanic": SeedDef(
         "seed_volcanic",
         "Volcanic Bloom",
         3,
         "Rare",
         "A blazing floral wonder that blooms amid floating embers. (Mist + Magma)",
-        growth_time_s=7200,  # 2 hours
-        coin_yield=600,
-        color="#EF476F",
+        growth_time_s=7200,
+        coin_yield=90,
+        color="`#EF476F`",
         icon_name="local_fire_department",
         emoji="⚡",
         mutation_chance=0.12,
@@ -174,10 +207,10 @@ SEEDS: dict[str, SeedDef] = {
         "Celestial Dahlia",
         3,
         "Rare",
-        "Shimmers with concentrated deep-space stardust and diamond petals. (Frost + Dawn)",
+        "Concentrated deep-space stardust and diamond petals. (Frost + Dawn)",
         growth_time_s=8400,
-        coin_yield=750,
-        color="#7209B7",
+        coin_yield=100,
+        color="`#7209B7`",
         icon_name="stars",
         emoji="🌌",
         mutation_chance=0.15,
@@ -189,8 +222,8 @@ SEEDS: dict[str, SeedDef] = {
         "Rare",
         "An intricate golden rose whose petals turn in rhythmic motion. (Dawn + Deep)",
         growth_time_s=9600,
-        coin_yield=850,
-        color="#FFD166",
+        coin_yield=110,
+        color="`#FFD166`",
         icon_name="hourglass_bottom",
         emoji="⏳",
         mutation_chance=0.15,
@@ -202,24 +235,102 @@ SEEDS: dict[str, SeedDef] = {
         "Rare",
         "Crackles with electric violet lightning across its leaves. (Mist + Iron)",
         growth_time_s=9600,
-        coin_yield=900,
-        color="#3A86FF",
+        coin_yield=120,
+        color="`#3A86FF`",
         icon_name="bolt",
         emoji="⛈️",
         mutation_chance=0.15,
     ),
-    # Tier 4: Mythic World Tree Flora
+    "seed_obsidian": SeedDef(
+        "seed_obsidian",
+        "Obsidian Lily",
+        3,
+        "Rare",
+        "Glassy midnight lily created by rapidly cooling volcanic embers with sacred water. (Volcanic + Aqua)",
+        growth_time_s=9000,
+        coin_yield=115,
+        color="`#5A189A`",
+        icon_name="shield_moon",
+        emoji="🖤",
+        mutation_chance=0.12,
+    ),
+    "seed_supernova": SeedDef(
+        "seed_supernova",
+        "Supernova Starflower",
+        3,
+        "Rare",
+        "Blinding stellar petals charged with pure solar kinetic radiance. (Celestial + Solar)",
+        growth_time_s=9000,
+        coin_yield=120,
+        color="`#FFBE0B`",
+        icon_name="flare",
+        emoji="💥",
+        mutation_chance=0.14,
+    ),
+    "seed_crystal_bell": SeedDef(
+        "seed_crystal_bell",
+        "Crystal Campanula",
+        3,
+        "Rare",
+        "Resonating crystal bells chiming with mindful cadence and focus. (Chrono + Spirit)",
+        growth_time_s=10200,
+        coin_yield=125,
+        color="`#90E0EF`",
+        icon_name="notifications_active",
+        emoji="🔔",
+        mutation_chance=0.14,
+    ),
+    "seed_magnetic": SeedDef(
+        "seed_magnetic",
+        "Lodestone Cactus",
+        3,
+        "Rare",
+        "A magnetic succulent crackling with iron filaments and earthen pull. (Storm + Terra)",
+        growth_time_s=10200,
+        coin_yield=125,
+        color="`#2B9348`",
+        icon_name="attractions",
+        emoji="🧲",
+        mutation_chance=0.14,
+    ),
+    "seed_plasma": SeedDef(
+        "seed_plasma",
+        "Plasma Lotus",
+        3,
+        "Rare",
+        "Superheated ionized petals dancing in a perpetual halo of neon plasma. (Volcanic + Storm)",
+        growth_time_s=12000,
+        coin_yield=160,
+        color="`#F72585`",
+        icon_name="electric_bolt",
+        emoji="🪷",
+        mutation_chance=0.15,
+    ),
+    "seed_astral": SeedDef(
+        "seed_astral",
+        "Astral Orchid",
+        3,
+        "Rare",
+        "Translucent nebula flower showing miniature revolving celestial constellations. (Celestial + Chrono)",
+        growth_time_s=13200,
+        coin_yield=175,
+        color="`#4CC9F0`",
+        icon_name="filter_vintage",
+        emoji="🌠",
+        mutation_chance=0.15,
+    ),
     "seed_yggdrasil": SeedDef(
         "seed_yggdrasil",
         "World Tree Sapling",
         4,
         "Mythic",
         "An ancient sprout pulsing with the primal life energy of the cosmos. (Deep + Iron)",
-        growth_time_s=14400,  # 4 hours
-        coin_yield=2200,
-        color="#06D6A0",
+        growth_time_s=14400,
+        coin_yield=280,
+        color="`#06D6A0`",
         icon_name="park",
         emoji="🌳",
+        mutation_chance=0.1,
     ),
     "seed_void": SeedDef(
         "seed_void",
@@ -227,32 +338,108 @@ SEEDS: dict[str, SeedDef] = {
         4,
         "Mythic",
         "A dark cosmic fruit enveloped in faint gravitational nebula rings. (Celestial + Volcanic)",
-        growth_time_s=18000,  # 5 hours
-        coin_yield=2800,
-        color="#9D4EDD",
+        growth_time_s=18000,
+        coin_yield=350,
+        color="`#9D4EDD`",
         icon_name="auto_awesome",
         emoji="🐉",
+        mutation_chance=0.1,
+    ),
+    "seed_phoenix": SeedDef(
+        "seed_phoenix",
+        "Phoenix Ash Willow",
+        4,
+        "Mythic",
+        "Flaming golden boughs whose falling embers regenerate the soil. (Volcanic + Supernova)",
+        growth_time_s=19200,
+        coin_yield=380,
+        color="`#F3722C`",
+        icon_name="whatshot",
+        emoji="🔥",
+        mutation_chance=0.1,
+    ),
+    "seed_genesis": SeedDef(
+        "seed_genesis",
+        "Genesis Bloom",
+        4,
+        "Mythic",
+        "Primal botanical origin flower radiating kaleidoscopic universal auroras. (Astral + Plasma)",
+        growth_time_s=21600,
+        coin_yield=420,
+        color="`#4895EF`",
+        icon_name="all_inclusive",
+        emoji="🌟",
+        mutation_chance=0.1,
     ),
 }
 
 # --- Altar Fusion Recipes Matrix ---
 FUSION_RECIPES: dict[frozenset[str], str] = {
-    # Tier 1 + Tier 1 -> Tier 2
     frozenset({"seed_aqua", "seed_solar"}): "seed_mist",
     frozenset({"seed_aqua", "seed_terra"}): "seed_deep",
     frozenset({"seed_solar", "seed_terra"}): "seed_magma",
     frozenset({"seed_solar", "seed_spirit"}): "seed_dawn",
     frozenset({"seed_aqua", "seed_spirit"}): "seed_frost",
     frozenset({"seed_terra", "seed_spirit"}): "seed_iron",
-    # Tier 2 + Tier 2 -> Tier 3
+    frozenset({"seed_deep", "seed_frost"}): "seed_abyssal",
+    frozenset({"seed_magma", "seed_dawn"}): "seed_solar_flare",
     frozenset({"seed_mist", "seed_magma"}): "seed_volcanic",
     frozenset({"seed_frost", "seed_dawn"}): "seed_celestial",
     frozenset({"seed_dawn", "seed_deep"}): "seed_chrono",
     frozenset({"seed_mist", "seed_iron"}): "seed_storm",
-    # Tier 3 Cross-Breeding -> Tier 4 Mythics
+    frozenset({"seed_volcanic", "seed_aqua"}): "seed_obsidian",
+    frozenset({"seed_celestial", "seed_solar"}): "seed_supernova",
+    frozenset({"seed_chrono", "seed_spirit"}): "seed_crystal_bell",
+    frozenset({"seed_storm", "seed_terra"}): "seed_magnetic",
+    frozenset({"seed_volcanic", "seed_storm"}): "seed_plasma",
+    frozenset({"seed_celestial", "seed_chrono"}): "seed_astral",
     frozenset({"seed_deep", "seed_iron"}): "seed_yggdrasil",
     frozenset({"seed_celestial", "seed_volcanic"}): "seed_void",
+    frozenset({"seed_volcanic", "seed_supernova"}): "seed_phoenix",
+    frozenset({"seed_astral", "seed_plasma"}): "seed_genesis",
 }
+
+
+def get_recipe_for_result(result_seed_id: str) -> tuple[str, str] | None:
+    """Returns the two ingredient seed IDs that combine to produce result_seed_id, or None."""
+    for pair, res in FUSION_RECIPES.items():
+        if res == result_seed_id:
+            items = sorted(pair)
+            return (items[0], items[1])
+    return None
+
+
+def get_recipes_list() -> list[dict[str, Any]]:
+    """Returns all 12 botanical fusion recipes with rich metadata for Codex/UI display."""
+    recipes: list[dict[str, Any]] = []
+    for pair, res_id in FUSION_RECIPES.items():
+        s_a_id, s_b_id = sorted(pair)
+        s_a = get_seed(s_a_id)
+        s_b = get_seed(s_b_id)
+        res_def = get_seed(res_id)
+        if s_a and s_b and res_def:
+            recipes.append(
+                {
+                    "result_id": res_id,
+                    "result_seed": res_def,
+                    "ingredient_a_id": s_a_id,
+                    "ingredient_a": s_a,
+                    "ingredient_b_id": s_b_id,
+                    "ingredient_b": s_b,
+                    "tier": res_def.tier,
+                }
+            )
+    return sorted(recipes, key=lambda r: (r["tier"], r["result_seed"].name))
+
+
+def is_recipe_discovered(grove: GroveState, result_seed_id: str) -> bool:
+    """Check if the player has discovered this botanical fusion recipe."""
+    if result_seed_id in grove.discovered_fusions:
+        return True
+    return bool(
+        grove.seeds.get(result_seed_id, 0) > 0 or grove.harvested.get(result_seed_id, 0) > 0
+    )
+
 
 
 @dataclass
@@ -276,6 +463,8 @@ class GroveState:
     total_harvests: int = 0
     discovered_fusions: list[str] = field(default_factory=list)
     last_awarded_habits: dict[str, str] = field(default_factory=dict)  # habit_name -> ISO day
+    luma_level: int = 1
+    luma_xp: int = 0
 
     def __post_init__(self) -> None:
         if not self.plots:
@@ -289,6 +478,89 @@ class GroveState:
                 "seed_terra": 1,
                 "seed_spirit": 1,
             }
+
+
+def ensure_grove_plots(grove: GroveState) -> None:
+    """Ensure player has appropriate plots unlocked based on LUMA level (Base: 6, Lv 5: 7, Lv 10: 8)."""
+    target = 6
+    if grove.luma_level >= 10:
+        target = 8
+    elif grove.luma_level >= 5:
+        target = 7
+    while len(grove.plots) < target:
+        grove.plots.append(CropPlot(plot_id=len(grove.plots)))
+
+
+def luma_xp_for_level(level: int) -> int:
+    """XP needed to advance to the next LUMA companion level."""
+    return max(100, level * 100)
+
+
+def luma_barter_multiplier(level: int) -> float:
+    """Companion Barter Rate: 1.00x at Lv 1, scaling up to 1.50x at Lv 10+."""
+    if level >= 10:
+        return 1.50
+    return round(1.0 + max(0, level - 1) * 0.05, 2)
+
+
+def luma_crop_feed_xp(seed_id: str, is_premium: bool = False) -> int:
+    """Base Companion XP gained by feeding this crop to LUMA (Tier 1: 20, T2: 60, T3: 180, T4: 500)."""
+    seed = get_seed(seed_id)
+    tier = seed.tier if seed else 1
+    base_xp = {1: 20, 2: 60, 3: 180, 4: 500}.get(tier, 20)
+    if is_premium:
+        # Legends+ Companion Feast Perk: +50% Companion XP
+        return round(base_xp * 1.5)
+    return base_xp
+
+
+def sell_crop_value(seed_id: str, luma_level: int = 1) -> int:
+    """Market sell value for 1 crop, factoring in LUMA barter bonus."""
+    seed = get_seed(seed_id)
+    if not seed:
+        return 0
+    mult = luma_barter_multiplier(luma_level)
+    return max(1, round(seed.coin_yield * mult))
+
+
+def sell_crop(grove: GroveState, crop_id: str, count: int = 1) -> int:
+    """Sell harvested crops from the Silo into coins. Returns total coins earned."""
+    available = grove.harvested.get(crop_id, 0)
+    if available <= 0 or count <= 0:
+        return 0
+    to_sell = min(available, count)
+    grove.harvested[crop_id] -= to_sell
+    if grove.harvested[crop_id] <= 0:
+        grove.harvested.pop(crop_id, None)
+
+    coins_per = sell_crop_value(crop_id, grove.luma_level)
+    return coins_per * to_sell
+
+
+def feed_luma(
+    grove: GroveState, crop_id: str, is_premium: bool = False
+) -> tuple[int, bool]:
+    """Feed 1 harvested crop to LUMA companion. Returns (xp_gained, did_level_up)."""
+    if grove.harvested.get(crop_id, 0) <= 0:
+        return 0, False
+
+    grove.harvested[crop_id] -= 1
+    if grove.harvested[crop_id] <= 0:
+        grove.harvested.pop(crop_id, None)
+
+    xp_gained = luma_crop_feed_xp(crop_id, is_premium)
+    grove.luma_xp += xp_gained
+
+    did_level_up = False
+    while grove.luma_xp >= luma_xp_for_level(grove.luma_level):
+        grove.luma_xp -= luma_xp_for_level(grove.luma_level)
+        grove.luma_level += 1
+        did_level_up = True
+
+    if did_level_up:
+        ensure_grove_plots(grove)
+
+    return xp_gained, did_level_up
 
 
 def get_seed(seed_id: str) -> SeedDef | None:
@@ -357,7 +629,13 @@ def plant_crop(grove: GroveState, plot_id: int, seed_id: str, now: datetime | No
 def harvest_crop(
     grove: GroveState, plot_id: int, rng: random.Random | None = None
 ) -> tuple[int, list[str]]:
-    """Harvest ready crop. Returns (coins_earned, bonus_seeds)."""
+    """Harvest ready crop.
+
+    Crops are placed directly into the Silo inventory (grove.harvested).
+    Direct coin yield on harvest is 0, giving the player the strategic choice
+    to either Sell at the market or Feed to their LUMA companion.
+    Returns (0, bonus_seeds).
+    """
     if plot_id < 0 or plot_id >= len(grove.plots):
         return 0, []
     plot = grove.plots[plot_id]
@@ -366,24 +644,24 @@ def harvest_crop(
 
     seed = get_seed(plot.seed_id)
     r = rng or random.Random()
-    coins = seed.coin_yield if seed else 50
 
     # Record harvest in silo
-    grove.harvested[plot.seed_id] = grove.harvested.get(plot.seed_id, 0) + 1
+    crop_id = plot.seed_id
+    grove.harvested[crop_id] = grove.harvested.get(crop_id, 0) + 1
     grove.total_harvests += 1
 
     # Bonus seeds roll
     bonus: list[str] = []
     # Always yield at least 1 returned seed or mutation
     if r.random() < (seed.mutation_chance if seed else 0.08):
-        # Lucky Starlight Mutation! Yield a random Tier 2 or Tier 3 seed!
+        # Lucky Starlight Mutation! Yield a random seed from all discovered or existing seeds
         mutated = r.choice(list(SEEDS.keys()))
         bonus.append(mutated)
         grove.seeds[mutated] = grove.seeds.get(mutated, 0) + 1
     else:
         # Standard seed drop
-        bonus.append(plot.seed_id)
-        grove.seeds[plot.seed_id] = grove.seeds.get(plot.seed_id, 0) + 1
+        bonus.append(crop_id)
+        grove.seeds[crop_id] = grove.seeds.get(crop_id, 0) + 1
 
     # Reset plot
     plot.seed_id = ""
@@ -392,7 +670,7 @@ def harvest_crop(
     plot.boost_s = 0.0
     plot.harvest_ready = False
 
-    return coins, bonus
+    return 0, bonus
 
 
 def fuse_seeds(

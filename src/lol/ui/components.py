@@ -194,7 +194,7 @@ def xp_chip(xp: int, dim: bool = False) -> ft.Container:
 
 
 def coin_chip(coins: int, dim: bool = False) -> ft.Container:
-    return chip(f"+{coins}", icon=COIN_ICON, color=C.ACCENT, dim=dim)
+    return chip(f"+{coins}", icon=COIN_ICON, color=C.GOLD, dim=dim)
 
 
 def streak_badge(days: int) -> ft.Container:
@@ -684,11 +684,11 @@ class CoinCounter(ft.Container):
                  on_click: Callback = None) -> None:
         self.value = value
         self._text = ft.Text(f"{value:,}", size=size, weight=ft.FontWeight.W_900, color=C.TEXT)
-        self._coin = ft.Icon(COIN_ICON, size=size + 4, color=C.ACCENT, scale=1,
+        self._coin = ft.Icon(COIN_ICON, size=size + 4, color=C.GOLD, scale=1,
                              animate_scale=Motion.anim(Motion.POP_MS * 2, Motion.BACK))
         super().__init__(
             content=ft.Row([self._coin, self._text], spacing=Space.XS + 2, tight=True),
-            bgcolor=C.a(C.ACCENT, 0.12), border_radius=Radius.PILL,
+            bgcolor=C.a(C.GOLD, 0.14), border_radius=Radius.PILL,
             padding=ft.Padding.symmetric(vertical=Space.XS + 2, horizontal=Space.MD),
             scale=1, animate_scale=Motion.anim(Motion.POP_MS, Motion.BACK),
             on_click=on_click,

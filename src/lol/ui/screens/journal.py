@@ -1,10 +1,16 @@
-"""Daily Journal & Mindfulness Reflection for LUMA.
+"""Daily Journal: A warm, lined notebook-style journal for LUMA.
 
-Tracks mood, gratitude, and daily highlights to reward Monk Path XP.
+Features:
+- Notebook page aesthetic with distraction-free writing.
+- Mood stamp & timestamp.
+- Quick inspiration prompt chips (+ Grateful for, + Today's win, + Lesson).
+- Full scrollability when virtual keyboard is open.
+- Awards +20 Monk Path XP per reflection.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import flet as ft
@@ -28,32 +34,78 @@ MOODS = (
 
 
 def open_journal_sheet(app: App, on_done: Any = None) -> None:
-    """Open a quick reflection sheet to log mood, gratitude, and thoughts."""
+    """Open a warm, scrollable notebook-style page to write journal thoughts."""
     selected_mood = ["good"]
+    now_dt = datetime.now()
+    date_display = now_dt.strftime("%A, %b %d • %I:%M %p")
 
-    gratitude_field = ft.TextField(
-        label="One thing I am grateful for...",
-        hint_text="e.g. Morning coffee, a kind message, fresh air",
-        multiline=False,
-        border_color=C.a(C.OUTLINE, 0.5),
-        border_radius=Radius.MD,
+    title_field = ft.TextField(
+        hint_text="Title or Theme (optional)...",
+        hint_style=ft.TextStyle(color=C.a(C.TEXT_DIM, 0.6), size=Type.TITLE),
+        text_style=ft.TextStyle(color=C.TEXT, size=Type.TITLE, weight=ft.FontWeight.BOLD),
+        border=ft.InputBorder.NONE,
+        content_padding=ft.Padding.symmetric(horizontal=4, vertical=6),
     )
-    highlight_field = ft.TextField(
-        label="Today's win or highlight...",
-        hint_text="e.g. Finished my workout, made progress on my goal",
-        multiline=False,
-        border_color=C.a(C.OUTLINE, 0.5),
-        border_radius=Radius.MD,
-    )
-    notes_field = ft.TextField(
-        label="Thoughts & Reflection (optional)",
-        hint_text="How was your day? Any insights or lessons?",
+
+    body_field = ft.TextField(
+        hint_text="Write freely... your thoughts, feelings, gratitude, or reflections on today...",
+        hint_style=ft.TextStyle(color=C.a(C.TEXT_DIM, 0.5), size=Type.BODY),
+        text_style=ft.TextStyle(color=C.TEXT, size=Type.BODY, height=1.5),
         multiline=True,
-        min_lines=2,
-        max_lines=4,
-        border_color=C.a(C.OUTLINE, 0.5),
-        border_radius=Radius.MD,
+        min_lines=6,
+        max_lines=14,
+        border=ft.InputBorder.NONE,
+        content_padding=ft.Padding.symmetric(horizontal=4, vertical=8),
+        autofocus=True,
     )
+
+    word_count_text = ft.Text("0 words", size=Type.CAPTION - 2, color=C.TEXT_DIM)
+
+    def on_body_change(e: Any) -> None:
+        text = e.control.value or ""
+        words = len(text.strip().split()) if text.strip() else 0
+        word_count_text.value = f"{words} words"
+        ui.refresh(word_count_text)
+
+    body_field.on_change = on_body_change
+
+    # Quick prompt inserts
+    def insert_prompt(prompt_text: str):
+        def do_insert(_):
+            current = body_field.value or ""
+            if current and not current.endswith("\n"):
+                current += "\n\n"
+            body_field.value = f"{current}{prompt_text} "
+            ui.refresh(body_field)
+            sfx.play("tap")
+        return do_insert
+
+    prompt_chips = [
+        ft.Container(
+            ft.Text("+ Grateful for...", size=Type.CAPTION - 2, color=C.GOLD),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            border_radius=Radius.PILL,
+            bgcolor=C.a(C.GOLD, 0.12),
+            border=ft.Border.all(1, C.a(C.GOLD, 0.3)),
+            on_click=insert_prompt("✨ Grateful for:"),
+        ),
+        ft.Container(
+            ft.Text("+ Today's Win:", size=Type.CAPTION - 2, color="#06D6A0"),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            border_radius=Radius.PILL,
+            bgcolor=C.a("#06D6A0", 0.12),
+            border=ft.Border.all(1, C.a("#06D6A0", 0.3)),
+            on_click=insert_prompt("🏆 Today's Win:"),
+        ),
+        ft.Container(
+            ft.Text("+ Lesson learned:", size=Type.CAPTION - 2, color="#C77DFF"),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            border_radius=Radius.PILL,
+            bgcolor=C.a("#C77DFF", 0.12),
+            border=ft.Border.all(1, C.a("#C77DFF", 0.3)),
+            on_click=insert_prompt("💡 Lesson learned:"),
+        ),
+    ]
 
     mood_chips: list[ft.Container] = []
 
@@ -62,8 +114,8 @@ def open_journal_sheet(app: App, on_done: Any = None) -> None:
             m_key = c.data
             active = m_key == selected_mood[0]
             color = next((col for k, _, _, col in MOODS if k == m_key), C.PRIMARY)
-            c.bgcolor = C.a(color, 0.25) if active else C.a(C.SURFACE_HI, 0.5)
-            c.border = ft.Border.all(1.5 if active else 1, color if active else C.a(C.OUTLINE, 0.4))
+            c.bgcolor = C.a(color, 0.25) if active else C.a(C.SURFACE_HI, 0.4)
+            c.border = ft.Border.all(1.5 if active else 1, color if active else C.a(C.OUTLINE, 0.3))
             ui.refresh(c)
 
     for key, emoji, label, color in MOODS:
@@ -85,79 +137,109 @@ def open_journal_sheet(app: App, on_done: Any = None) -> None:
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
             data=key,
-            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
             border_radius=Radius.PILL,
-            bgcolor=C.a(color, 0.25) if key == "good" else C.a(C.SURFACE_HI, 0.5),
-            border=ft.Border.all(1.5 if key == "good" else 1, color if key == "good" else C.a(C.OUTLINE, 0.4)),
+            bgcolor=C.a(color, 0.25) if key == "good" else C.a(C.SURFACE_HI, 0.4),
+            border=ft.Border.all(1.5 if key == "good" else 1, color if key == "good" else C.a(C.OUTLINE, 0.3)),
             on_click=make_pick(key),
         )
         mood_chips.append(chip)
 
     def save_reflection(_: Any = None) -> None:
+        title = (title_field.value or "").strip()
+        body_text = (body_field.value or "").strip()
+        if not body_text and not title:
+            app.toast("Write a few thoughts before saving!", ft.Icons.EDIT)
+            return
+
         app.game.add_journal(
             mood=selected_mood[0],
-            gratitude=gratitude_field.value or "",
-            highlight=highlight_field.value or "",
-            notes=notes_field.value or "",
+            gratitude="",
+            highlight=title,
+            notes=body_text,
             today=app.today(),
         )
         app.save()
         sfx.play("quest_done")
-        app.toast("🧘 Mindful reflection recorded! +20 Monk XP", ft.Icons.AUTO_AWESOME)
+        app.toast("📖 Notebook entry saved! +20 Monk XP", ft.Icons.AUTO_AWESOME)
         common.close(bs)
         if callable(on_done):
             on_done()
 
-    bs = ft.BottomSheet(
-        ft.Container(
-            ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Row(
-                                [
-                                    ft.Icon(ft.Icons.AUTO_STORIES, color="#C77DFF", size=22),
-                                    ft.Text(
-                                        "Daily Reflection",
-                                        size=Type.TITLE,
-                                        weight=ft.FontWeight.BOLD,
-                                        color=C.TEXT,
-                                    ),
-                                ],
-                                spacing=Space.SM,
-                            ),
-                            ft.IconButton(ft.Icons.CLOSE, on_click=lambda _: common.close(bs)),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                    ft.Text("How are you feeling today?", size=Type.CAPTION, color=C.TEXT_DIM),
-                    ft.Row(mood_chips, spacing=Space.XS, wrap=True),
-                    gratitude_field,
-                    highlight_field,
-                    notes_field,
-                    ft.Row(
-                        [
-                            ft.FilledButton(
-                                "Save Reflection (+20 XP)",
-                                icon=ft.Icons.CHECK,
-                                style=ft.ButtonStyle(
-                                    bgcolor="#C77DFF",
-                                    color="#0D1F2D",
-                                    shape=ft.RoundedRectangleBorder(radius=Radius.PILL),
+    # The Notebook Page container
+    notebook_page = ft.Container(
+        ft.Column(
+            [
+                # Date and Header bar
+                ft.Row(
+                    [
+                        ft.Row(
+                            [
+                                ft.Icon(ft.Icons.AUTO_STORIES, color="#C77DFF", size=20),
+                                ft.Text(
+                                    date_display,
+                                    size=Type.CAPTION,
+                                    weight=ft.FontWeight.W_600,
+                                    color="#C77DFF",
                                 ),
-                                on_click=save_reflection,
-                                expand=True,
+                            ],
+                            spacing=Space.SM,
+                        ),
+                        ft.IconButton(
+                            ft.Icons.CLOSE,
+                            icon_size=20,
+                            icon_color=C.TEXT_DIM,
+                            on_click=lambda _: common.close(bs),
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                # Mood selector row
+                ft.Row(mood_chips, spacing=Space.XS, scroll=ft.ScrollMode.AUTO),
+                ft.Divider(height=1, color=C.a(C.OUTLINE, 0.4)),
+                # Title line
+                title_field,
+                ft.Divider(height=1, color=C.a(C.OUTLINE, 0.25)),
+                # Main journal writing area
+                body_field,
+                # Prompt chips and word count
+                ft.Row(
+                    [
+                        ft.Row(prompt_chips, spacing=Space.XS, scroll=ft.ScrollMode.AUTO, expand=True),
+                        word_count_text,
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                ft.Divider(height=1, color=C.a(C.OUTLINE, 0.3)),
+                # Save Button
+                ft.Row(
+                    [
+                        ft.FilledButton(
+                            "Save Notebook Entry (+20 XP)",
+                            icon=ft.Icons.BOOKMARK_ADDED,
+                            style=ft.ButtonStyle(
+                                bgcolor="#C77DFF",
+                                color="#0D1F2D",
+                                shape=ft.RoundedRectangleBorder(radius=Radius.PILL),
                             ),
-                        ],
-                    ),
-                ],
-                spacing=Space.MD,
-                tight=True,
-            ),
-            padding=Space.LG,
-            bgcolor=C.SURFACE,
-            border_radius=ft.BorderRadius(top_left=Radius.LG, top_right=Radius.LG, bottom_left=0, bottom_right=0),
-        )
+                            on_click=save_reflection,
+                            expand=True,
+                        ),
+                    ],
+                ),
+            ],
+            spacing=Space.SM,
+            scroll=ft.ScrollMode.AUTO,  # Allows smooth scrolling when keyboard appears
+        ),
+        padding=Space.LG,
+        bgcolor=C.SURFACE,
+        border_radius=ft.BorderRadius(top_left=Radius.LG, top_right=Radius.LG, bottom_left=0, bottom_right=0),
+    )
+
+    bs = ft.BottomSheet(
+        notebook_page,
+        bgcolor=ft.Colors.TRANSPARENT,
+        scrollable=True,  # Ensures Android keyboard moves sheet up and lets user scroll freely
     )
     app.page.show_dialog(bs)
 
@@ -173,7 +255,7 @@ class JournalScreen:
             icon=ft.Icons.EDIT_NOTE,
             bgcolor="#C77DFF",
             foreground_color="#0D1F2D",
-            tooltip="New Reflection",
+            tooltip="New Journal Page",
             on_click=lambda _: open_journal_sheet(self.app, self.render),
         )
 
@@ -182,21 +264,28 @@ class JournalScreen:
         g = self.app.game
         entries = g.journal_entries()
 
-        # Header card
+        # Notebook Binder Header Card
         header = common.card(
             ft.Row(
                 [
-                    ft.Icon(ft.Icons.AUTO_STORIES_ROUNDED, color="#C77DFF", size=28),
+                    ft.Container(
+                        ft.Icon(ft.Icons.AUTO_STORIES_ROUNDED, color="#C77DFF", size=30),
+                        width=52,
+                        height=52,
+                        border_radius=Radius.MD,
+                        bgcolor=C.a("#C77DFF", 0.18),
+                        alignment=ft.Alignment(0, 0),
+                    ),
                     ft.Column(
                         [
                             ft.Text(
-                                "DAILY JOURNAL",
+                                "MY NOTEBOOK JOURNAL",
                                 size=Type.CAPTION,
                                 weight=ft.FontWeight.W_800,
                                 color="#C77DFF",
                             ),
                             ft.Text(
-                                f"{len(entries)} Mindful Entries",
+                                f"{len(entries)} Written Pages",
                                 size=Type.TITLE,
                                 weight=ft.FontWeight.BOLD,
                                 color=C.TEXT,
@@ -207,7 +296,7 @@ class JournalScreen:
                     ),
                     ft.FilledButton(
                         "Write",
-                        icon=ft.Icons.ADD,
+                        icon=ft.Icons.EDIT,
                         style=ft.ButtonStyle(
                             bgcolor="#C77DFF",
                             color="#0D1F2D",
@@ -226,10 +315,10 @@ class JournalScreen:
             self.list.controls.append(
                 common.card(
                     ui.EmptyState(
-                        "No journal entries yet",
-                        "Capture your thoughts, celebrate small wins, and reflect on your days.",
+                        "Your notebook is waiting",
+                        "Open a blank page to write your thoughts, celebrate your wins, and capture your journey.",
                         icon=ft.Icons.AUTO_STORIES,
-                        action_text="Write First Entry",
+                        action_text="Open Blank Page",
                         on_action=lambda _: open_journal_sheet(self.app, self.render),
                     ),
                     padding=0,
@@ -237,77 +326,82 @@ class JournalScreen:
             )
         else:
             for entry in entries:
-                self.list.controls.append(self._entry_card(entry))
+                self.list.controls.append(self._notebook_page_card(entry))
 
         ui.refresh(self.list)
 
-    def _entry_card(self, entry: JournalEntry) -> ft.Control:
+    def _notebook_page_card(self, entry: JournalEntry) -> ft.Control:
         mood_meta = next((m for m in MOODS if m[0] == entry.mood), MOODS[1])
         emoji, label, color = mood_meta[1], mood_meta[2], mood_meta[3]
+
+        entry_title = entry.highlight or "Journal Entry"
 
         content_rows: list[ft.Control] = [
             ft.Row(
                 [
-                    ft.Container(
-                        ft.Text(emoji, size=20),
-                        width=36,
-                        height=36,
-                        border_radius=Radius.SM,
-                        bgcolor=C.a(color, 0.2),
-                        alignment=ft.Alignment(0, 0),
-                    ),
-                    ft.Column(
+                    ft.Row(
                         [
-                            ft.Text(
-                                f"{entry.day} • {entry.time or ''}",
-                                size=Type.CAPTION,
-                                color=C.TEXT_DIM,
+                            ft.Container(
+                                ft.Text(emoji, size=18),
+                                width=32,
+                                height=32,
+                                border_radius=Radius.SM,
+                                bgcolor=C.a(color, 0.2),
+                                alignment=ft.Alignment(0, 0),
                             ),
-                            ft.Text(
-                                f"Felt {label}",
-                                size=Type.BODY,
-                                weight=ft.FontWeight.BOLD,
-                                color=C.TEXT,
+                            ft.Column(
+                                [
+                                    ft.Text(
+                                        entry_title,
+                                        size=Type.BODY,
+                                        weight=ft.FontWeight.BOLD,
+                                        color=C.TEXT,
+                                        max_lines=1,
+                                        overflow=ft.TextOverflow.ELLIPSIS,
+                                    ),
+                                    ft.Text(
+                                        f"{entry.day} • {entry.time or ''} • {label}",
+                                        size=Type.CAPTION - 1,
+                                        color=C.TEXT_DIM,
+                                    ),
+                                ],
+                                spacing=0,
                             ),
                         ],
-                        spacing=0,
+                        spacing=Space.SM,
                         expand=True,
                     ),
                     ft.IconButton(
                         ft.Icons.DELETE_OUTLINE,
                         icon_size=18,
                         icon_color=C.TEXT_DIM,
-                        tooltip="Delete entry",
+                        tooltip="Tear page out",
                         on_click=lambda _, eid=entry.id: self._confirm_delete(eid),
                     ),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
+            ft.Divider(height=1, color=C.a(C.OUTLINE, 0.25)),
         ]
 
+        if entry.notes:
+            content_rows.append(
+                ft.Text(
+                    entry.notes,
+                    size=Type.BODY - 1,
+                    color=C.a(C.TEXT, 0.9),
+                    style=ft.TextStyle(height=1.4),
+                )
+            )
         if entry.gratitude:
             content_rows.append(
                 ft.Row(
                     [
                         ft.Icon(ft.Icons.FAVORITE_ROUNDED, size=14, color="#FF8FA3"),
-                        ft.Text(entry.gratitude, size=Type.BODY - 1, color=C.TEXT, expand=True),
+                        ft.Text(f"Grateful for: {entry.gratitude}", size=Type.CAPTION, color=C.TEXT_DIM, expand=True),
                     ],
                     spacing=Space.SM,
                 )
-            )
-        if entry.highlight:
-            content_rows.append(
-                ft.Row(
-                    [
-                        ft.Icon(ft.Icons.EMOJI_EVENTS_ROUNDED, size=14, color=C.GOLD),
-                        ft.Text(entry.highlight, size=Type.BODY - 1, color=C.TEXT, expand=True),
-                    ],
-                    spacing=Space.SM,
-                )
-            )
-        if entry.notes:
-            content_rows.append(
-                ft.Text(entry.notes, size=Type.CAPTION, color=C.a(C.TEXT, 0.85))
             )
 
         return common.card(
@@ -319,8 +413,8 @@ class JournalScreen:
         async def do_delete():
             ok = await common.confirm(
                 self.app.page,
-                "Delete journal entry?",
-                "This cannot be undone.",
+                "Tear out this notebook page?",
+                "This journal entry will be permanently deleted.",
                 "Delete",
                 danger=True,
             )
@@ -330,4 +424,3 @@ class JournalScreen:
                 self.render()
 
         self.app.page.run_task(do_delete)
-
